@@ -7,11 +7,42 @@
 define('APP_NAME', 'MDM Control Center');
 define('APP_VERSION', '1.0.0');
 
-// Auto-detect APP_URL based on environment
+// Auto-detect or read from .env
+if (!function_exists('getConstantEnv')) {
+    function getConstantEnv(string $key, string $default): string {
+        static $env = null;
+        if ($env === null) {
+            $env = [];
+            $envPath = __DIR__ . '/../.env';
+            if (file_exists($envPath)) {
+                $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+                foreach ($lines as $line) {
+                    if (strpos(trim($line), '#') === 0) continue;
+                    $parts = explode('=', $line, 2);
+                    if (count($parts) === 2) {
+                        $env[trim($parts[0])] = trim($parts[1]);
+                    }
+                }
+            }
+        }
+        return $env[$key] ?? $default;
+    }
+}
+
 $_protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $_host     = $_SERVER['HTTP_HOST'] ?? 'localhost';
-$_basePath = rtrim(dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '/mdm')), '/');
-define('APP_URL', $_protocol . '://' . $_host . '/mdm');
+$_docRoot  = rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+$_currentDir = rtrim(str_replace('\\', '/', __DIR__), '/');
+$_rootPhysicalPath = dirname($_currentDir);
+$_basePath = '';
+if (!empty($_docRoot) && strpos($_rootPhysicalPath, $_docRoot) === 0) {
+    $_basePath = substr($_rootPhysicalPath, strlen($_docRoot));
+}
+$_basePath = rtrim(str_replace('\\', '/', $_basePath), '/');
+
+$_defaultUrl = $_protocol . '://' . $_host . $_basePath;
+define('APP_URL', getConstantEnv('APP_URL', $_defaultUrl));
+
 
 // Session
 define('SESSION_LIFETIME', 86400); // 24 hours
