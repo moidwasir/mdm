@@ -12,14 +12,16 @@ jobs:
       - name: 🚚 Checkout Repository Code
         uses: actions/checkout@v4
 
-      - name: 🔑 Configure SSH Key Pairing
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: 🔑 Install SSH Key securely
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: "placeholder"
+
+      - name: 🔍 Scan and register VPS Host Key
         run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
 
 
 
