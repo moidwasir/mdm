@@ -12,14 +12,15 @@ jobs:
       - name: 🚚 Checkout Repository Code
         uses: actions/checkout@v4
 
-      - name: 🔑 Configure SSH Key Pairing (Base64 decoded)
+      - name: 🔑 Configure SSH Key Pairing
         env:
-          SSH_PRIVATE_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/id_rsa
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
 
 
 
