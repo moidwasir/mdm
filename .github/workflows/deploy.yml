@@ -15,9 +15,12 @@ jobs:
       - name: 🔑 Configure SSH Key Pairing
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          cat << 'EOF' > ~/.ssh/id_rsa
+          ${{ secrets.SSH_PRIVATE_KEY }}
+          EOF
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
 
       - name: 📤 Sync Files to Hostinger VPS
         run: |
