@@ -32,6 +32,7 @@ jobs:
           rsync -avz --delete \
             --exclude=".git" \
             --exclude=".github" \
+            --exclude=".env" \
             --exclude="android/" \
             --exclude="vendor/" \
             --exclude="*.log" \
