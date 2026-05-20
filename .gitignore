@@ -1,0 +1,41 @@
+# ============================================================
+# MDM Project — Git Ignore Patterns
+# ============================================================
+
+# OS specific files
+.DS_Store
+Thumbs.db
+*.tmp
+
+# PHP environment & logging files
+.env
+*.log
+composer.lock
+vendor/
+config/firebase-service-account.json
+
+# Web assets uploads & compiled binaries
+assets/uploads/*
+!assets/uploads/.gitkeep
+apk/*
+!apk/.gitkeep
+
+# Android system build files
+.gradle/
+build/
+local.properties
+*.apk
+*.aar
+*.jar
+*.ap_
+*.keystore
+
+# Specific Android module build files
+android/*/build/
+android/*/.gradle/
+android/*/local.properties
+android/*/app/google-services.json
+
+# XAMPP / environment specific files
+temp/
+logs/

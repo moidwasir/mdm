@@ -1,0 +1,61 @@
+name: Production CI/CD Auto-Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚚 Checkout Repository Code
+        uses: actions/checkout@v4
+
+      - name: 🔑 Configure SSH Key Pairing
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 📤 Sync Files to Hostinger VPS
+        run: |
+          rsync -avz --delete \
+            --exclude=".git" \
+            --exclude=".github" \
+            --exclude="android/" \
+            --exclude="vendor/" \
+            --exclude="*.log" \
+            --exclude=".DS_Store" \
+            --exclude="assets/uploads/*" \
+            --exclude="apk/*" \
+            ./ ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:/var/www/html/mdm/
+
+      - name: ⚙️ Post-Deployment Execution on VPS
+        run: |
+          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "
+            cd /var/www/html/mdm
+            
+            echo '📦 Installing Composer Dependencies...'
+            composer install --no-dev --optimize-autoloader
+            
+            echo '📁 Provisioning Writable Directories...'
+            mkdir -p assets/uploads apk
+            chmod -R 777 assets/uploads apk
+            chown -R www-data:www-data assets/uploads apk
+            
+            echo '⚙️ Configuring Background WebSocket Daemon...'
+            if [ -f scripts/mdm-websocket.service ]; then
+              sudo cp scripts/mdm-websocket.service /etc/systemd/system/mdm-websocket.service
+              sudo systemctl daemon-reload
+              sudo systemctl enable mdm-websocket
+              sudo systemctl restart mdm-websocket
+              echo '✅ WebSocket Service restarted successfully!'
+            fi
+            
+            echo '🔐 Resolving File Permissions...'
+            find . -type f -name '*.php' -exec chmod 644 {} \;
+            find . -type d -exec chmod 755 {} \;
+            sudo chown -R www-data:www-data /var/www/html/mdm
+          "

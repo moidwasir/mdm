@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        Production: only allow HTTPS to your actual domain.
+        Development LAN: also allow cleartext to your local XAMPP IP.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Your local development XAMPP server -->
+        <domain includeSubdomains="true">192.168.18.59</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+    </domain-config>
+
+    <!-- Production domain — HTTPS only -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -1,0 +1,17 @@
+[Unit]
+Description=MDM Control Center — Real-Time Chat WebSocket Daemon
+After=network.target mysql.service apache2.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/html/mdm
+ExecStart=/usr/bin/php /var/www/html/mdm/websocket/server.php
+Restart=always
+RestartSec=5s
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=mdm-websocket
+
+[Install]
+WantedBy=multi-user.target
