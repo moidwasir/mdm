@@ -5,6 +5,14 @@ $db = getDB();
 $policies = $db->query("SELECT id, name FROM policies ORDER BY is_default DESC")->fetchAll();
 $tokens = $db->query("SELECT et.*, p.name as policy_name FROM enrollment_tokens et LEFT JOIN policies p ON et.policy_id = p.id ORDER BY et.created_at DESC LIMIT 20")->fetchAll();
 
+// Calculate DPC APK Checksum dynamically (SHA-256 base64-url-safe)
+$apkPath = APK_DIR . 'mdm-agent.apk';
+$apkChecksum = '';
+if (file_exists($apkPath)) {
+    $sha256 = hash_file('sha256', $apkPath, true);
+    $apkChecksum = rtrim(strtr(base64_encode($sha256), '+/', '-_'), '=');
+}
+
 include __DIR__ . '/../includes/header.php';
 ?>
 
@@ -115,7 +123,7 @@ function showQR(token) {
             "com.mdm.agent/com.mdm.agent.DeviceAdminReceiver",
         "android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":
             `<?= APP_URL ?>/apk/mdm-agent.apk`,
-        "android.app.extra.PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM": "",
+        "android.app.extra.PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM": "<?= $apkChecksum ?>",
         "android.app.extra.PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED": false,
         "android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE": {
             "enrollment_token": token,
