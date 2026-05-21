@@ -123,7 +123,7 @@ function showQR(token) {
             "com.mdm.agent/com.mdm.agent.DeviceAdminReceiver",
         "android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION":
             `<?= APP_URL ?>/apk/mdm-agent.apk`,
-        "android.app.extra.PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM": "<?= $apkChecksum ?>",
+        "android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM": "<?= $apkChecksum ?>",
         "android.app.extra.PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED": false,
         "android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE": {
             "enrollment_token": token,
