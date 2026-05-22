@@ -1,9 +1,11 @@
 package com.mdm.agent
 
+import android.Manifest
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -12,6 +14,8 @@ import android.os.UserManager
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.mdm.agent.api.ApiClient
 import com.mdm.agent.api.CheckRegistrationRequest
 import com.mdm.agent.api.CheckRegistrationResponse
@@ -59,6 +63,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTabSettings: TextView
     private lateinit var layoutSystemVersion: View
     private lateinit var tvWorkspaceLabel: TextView
+    private lateinit var tvDpcOwner: TextView
+    private lateinit var tvServerStatus: TextView
 
     // Secret Toggle State
     private var versionClickCount = 0
@@ -72,6 +78,9 @@ class MainActivity : AppCompatActivity() {
 
         // 2. Setup UI references and click listeners
         setupUI()
+
+        // Check and self-grant/request permissions before enrollment/registration checks
+        ensurePermissions()
 
         // Check if token was passed in the intent (manual developer enrollment command)
         val tokenExtra = intent?.getStringExtra("enrollment_token")
@@ -101,6 +110,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        ensurePermissions()
+        updateUI()
+    }
+
     private fun setupUI() {
         tvStatusTitle = findViewById(R.id.tv_status_title)
         tvStatusDesc = findViewById(R.id.tv_status_desc)
@@ -120,6 +135,8 @@ class MainActivity : AppCompatActivity() {
         btnTabSettings = findViewById(R.id.btn_tab_settings)
         layoutSystemVersion = findViewById(R.id.layout_system_version)
         tvWorkspaceLabel = findViewById(R.id.tv_workspace_label)
+        tvDpcOwner = findViewById(R.id.tv_dpc_owner)
+        tvServerStatus = findViewById(R.id.tv_server_status)
 
         btnLaunchChat.setOnClickListener { launchChatApp() }
         btnLaunchCamera.setOnClickListener { launchCamera() }
@@ -239,6 +256,25 @@ class MainActivity : AppCompatActivity() {
         tvImei.text = imei
         tvDeviceId.text = if (deviceId > 0) "#$deviceId" else "Offline (Awaiting Server ID)"
         tvActivationImei.text = "IMEI: $imei"
+
+        // Dynamic DPC Owner status verification
+        val isDpc = dpm.isDeviceOwnerApp(packageName)
+        if (isDpc) {
+            tvDpcOwner.text = "ACTIVE"
+            tvDpcOwner.setTextColor(Color.parseColor("#10B981")) // Green
+        } else {
+            tvDpcOwner.text = "NOT ACTIVE"
+            tvDpcOwner.setTextColor(Color.parseColor("#EF4444")) // Red
+        }
+
+        // Dynamic Server Connection status
+        if (enrolled) {
+            tvServerStatus.text = "CONNECTED"
+            tvServerStatus.setTextColor(Color.parseColor("#10B981")) // Green
+        } else {
+            tvServerStatus.text = "DISCONNECTED"
+            tvServerStatus.setTextColor(Color.parseColor("#EF4444")) // Red
+        }
 
         val pm = PolicyManager(this)
         val isSecureMode = pm.isSecureModeActive()
@@ -472,23 +508,101 @@ class MainActivity : AppCompatActivity() {
         PolicyManager(this).scheduleChatAppInstall()
     }
 
-    @Suppress("HardwareIds", "MissingPermission")
-    private fun getImei(): String {
-        val raw = try {
-            val tm = getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
-            @Suppress("DEPRECATION")
-            val id = tm.deviceId
-            if (!id.isNullOrEmpty() && id != "unknown") {
-                id
+    private fun ensurePermissions() {
+        try {
+            if (dpm.isDeviceOwnerApp(packageName)) {
+                val granted = dpm.setPermissionGrantState(
+                    adminComponent,
+                    packageName,
+                    Manifest.permission.READ_PHONE_STATE,
+                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+                )
+                Log.i(TAG, "Successfully set READ_PHONE_STATE grant state: $granted")
             } else {
-                @Suppress("DEPRECATION")
-                val serial = android.os.Build.SERIAL
-                if (!serial.isNullOrEmpty() && serial != "unknown") serial else ""
+                Log.w(TAG, "App is not Device Owner. Requesting permission at runtime.")
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_PHONE_STATE), 101)
+                }
             }
         } catch (e: Exception) {
-            @Suppress("DEPRECATION")
-            val serial = try { android.os.Build.SERIAL } catch (se: Exception) { "" }
-            if (!serial.isNullOrEmpty() && serial != "unknown") serial else ""
+            Log.e(TAG, "Error in ensurePermissions: ${e.message}")
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 101) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.i(TAG, "READ_PHONE_STATE permission granted by user.")
+                // Trigger re-registration and UI update with the new IMEI
+                val enrolled = prefs.getBoolean("enrolled", false)
+                if (!enrolled) {
+                    val token = prefs.getString("enrollment_token", "") ?: ""
+                    if (token.isNotEmpty()) {
+                        enrollWithServer(token)
+                    } else {
+                        checkRegistration()
+                    }
+                }
+                updateUI()
+            } else {
+                Log.w(TAG, "READ_PHONE_STATE permission denied by user.")
+            }
+        }
+    }
+
+    @Suppress("HardwareIds", "MissingPermission")
+    private fun getImei(): String {
+        // If we don't have the permission, check if we can get it, or fall back immediately to prevent SecurityExceptions.
+        val hasPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+        
+        val raw = if (hasPermission) {
+            try {
+                val tm = getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
+                var id: String? = null
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    try {
+                        id = tm.getImei(0)
+                        if (id.isNullOrEmpty()) {
+                            id = tm.imei
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed tm.getImei(0)/tm.imei: ${e.message}")
+                    }
+                }
+                if (id.isNullOrEmpty()) {
+                    @Suppress("DEPRECATION")
+                    id = tm.deviceId
+                }
+                
+                if (!id.isNullOrEmpty() && id != "unknown") {
+                    id
+                } else {
+                    var serial: String? = null
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        try {
+                            serial = Build.getSerial()
+                        } catch (se: Exception) {
+                            Log.w(TAG, "Build.getSerial() failed: ${se.message}")
+                        }
+                    }
+                    if (serial.isNullOrEmpty() || serial == "unknown") {
+                        @Suppress("DEPRECATION")
+                        serial = Build.SERIAL
+                    }
+                    if (!serial.isNullOrEmpty() && serial != "unknown") serial else ""
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Unexpected error retrieving hardware IDs: ${e.message}")
+                ""
+            }
+        } else {
+            Log.w(TAG, "READ_PHONE_STATE permission not granted. Using fallback ID.")
+            ""
         }
 
         // If raw is a valid 15-digit numeric string, return it
@@ -496,8 +610,14 @@ class MainActivity : AppCompatActivity() {
             return raw
         }
 
-        // Otherwise, construct a stable 15-digit dummy IMEI starting with 12345
-        val hash = raw.hashCode().toString().replace("-", "")
+        // Fallback: use Settings.Secure.ANDROID_ID to construct a stable 15-digit dummy IMEI starting with 12345
+        val androidId = try {
+            Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+        val fallbackSource = if (androidId.isNotEmpty()) androidId else raw
+        val hash = fallbackSource.hashCode().toString().replace("-", "")
         val paddedHash = hash.padEnd(10, '0').take(10)
         return "12345$paddedHash"
     }
