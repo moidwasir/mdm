@@ -73,7 +73,7 @@ jsonResponse([
     'success'   => true,
     'message'   => 'Device enrolled successfully',
     'device_id' => $deviceId,
-    'policy'    => $policy,
+    'policy'    => formatPolicy($policy),
     'ws_url'    => 'ws://' . $_SERVER['HTTP_HOST'] . ':' . WEBSOCKET_PORT,
     'api_url'   => APP_URL . '/api',
 ]);

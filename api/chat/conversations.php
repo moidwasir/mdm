@@ -53,6 +53,28 @@ if ($method === 'GET') {
         $conv['members'] = $mstmt->fetchAll();
         jsonResponse(['success' => true, 'conversation' => $conv]);
     }
+
+    if ($action === 'users') {
+        $stmt = $db->prepare("SELECT id, username, display_name, avatar FROM users WHERE id != ? AND is_active = 1");
+        $stmt->execute([$userId]);
+        $users = $stmt->fetchAll();
+        
+        $conversations = [];
+        foreach ($users as $u) {
+            $conversations[] = [
+                'id' => (int)$u['id'],
+                'type' => 'direct',
+                'name' => $u['display_name'],
+                'avatar' => $u['avatar'],
+                'last_message' => $u['username'],
+                'last_message_at' => null,
+                'unread_count' => 0,
+                'my_role' => 'member',
+                'updated_at' => null
+            ];
+        }
+        jsonResponse(['success' => true, 'conversations' => $conversations]);
+    }
 }
 
 // ---- POST: Create conversation ----

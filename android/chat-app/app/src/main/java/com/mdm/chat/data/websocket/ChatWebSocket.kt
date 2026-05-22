@@ -1,5 +1,7 @@
 package com.mdm.chat.data.websocket
 
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -21,9 +23,27 @@ class ChatWebSocket(
     private val userId: Int,
     private val token: String
 ) {
-    companion object { const val TAG = "ChatWS" }
+    companion object {
+        const val TAG = "ChatWS"
+        const val RECONNECT_DELAY_MS = 5_000L
+    }
 
     private var ws: WebSocket? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * Tracks the pending reconnect Runnable so we can cancel it if the user
+     * intentionally disconnects. Without this, multiple reconnect tasks can
+     * pile up during long sessions or screen rotations.
+     */
+    private var pendingReconnect: Runnable? = null
+
+    /**
+     * Set to true when disconnect() is called by the user. Prevents the
+     * onFailure/onClosed callbacks from scheduling a reconnect.
+     */
+    private var isClosedByUser = false
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .pingInterval(30, TimeUnit.SECONDS)
@@ -37,6 +57,7 @@ class ChatWebSocket(
 
     fun connect() {
         if (isConnected) return
+        isClosedByUser = false
         val request = Request.Builder().url(wsUrl).build()
         ws = client.newWebSocket(request, object : WebSocketListener() {
 
@@ -44,7 +65,7 @@ class ChatWebSocket(
                 Log.i(TAG, "WebSocket connected")
                 isConnected = true
                 _events.tryEmit(WsEvent.Connected)
-                // Authenticate immediately
+                // Authenticate immediately after connection
                 send(mapOf("type" to "auth", "user_id" to userId, "token" to token))
             }
 
@@ -71,8 +92,10 @@ class ChatWebSocket(
                 Log.w(TAG, "WebSocket failed: ${t.message}")
                 isConnected = false
                 _events.tryEmit(WsEvent.Disconnected)
-                // Reconnect after 5s
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ connect() }, 5_000)
+                // Only auto-reconnect if the disconnect was NOT user-initiated
+                if (!isClosedByUser) {
+                    scheduleReconnect()
+                }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -80,6 +103,16 @@ class ChatWebSocket(
                 _events.tryEmit(WsEvent.Disconnected)
             }
         })
+    }
+
+    /** Schedules a single reconnect attempt, cancelling any previously pending one. */
+    private fun scheduleReconnect() {
+        // Cancel any in-flight reconnect task before posting a new one
+        pendingReconnect?.let { mainHandler.removeCallbacks(it) }
+        val task = Runnable { connect() }
+        pendingReconnect = task
+        mainHandler.postDelayed(task, RECONNECT_DELAY_MS)
+        Log.i(TAG, "Reconnect scheduled in ${RECONNECT_DELAY_MS}ms")
     }
 
     fun sendMessage(convId: Int, content: String, type: String = "text", mediaUrl: String? = null) {
@@ -104,11 +137,20 @@ class ChatWebSocket(
 
     private fun send(data: Map<String, Any?>) {
         val json = JSONObject(data).toString()
-        ws?.send(json) ?: Log.w(TAG, "WebSocket not connected")
+        ws?.send(json) ?: Log.w(TAG, "WebSocket not connected — message dropped")
     }
 
+    /**
+     * Intentionally close the WebSocket. Cancels any pending reconnect tasks
+     * and marks the close as user-initiated to prevent auto-reconnect loops.
+     */
     fun disconnect() {
+        isClosedByUser = true
+        pendingReconnect?.let { mainHandler.removeCallbacks(it) }
+        pendingReconnect = null
         ws?.close(1000, "App closed")
+        ws = null
         isConnected = false
+        Log.i(TAG, "WebSocket disconnected by user")
     }
 }

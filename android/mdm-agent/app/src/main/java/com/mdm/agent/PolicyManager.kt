@@ -8,6 +8,8 @@ import android.os.UserManager
 import android.util.Log
 import androidx.work.*
 import java.util.concurrent.TimeUnit
+import android.content.pm.PackageManager
+import android.view.inputmethod.InputMethodManager
 
 data class PolicyConfig(
     val kiosk_mode: Boolean = true,
@@ -109,6 +111,140 @@ class PolicyManager(private val context: Context) {
             disable_factory_reset = prefs.getBoolean("policy_disable_factory_reset", true)
         )
         applyPolicy(policy)
+
+        // Apply secure mode state
+        val secureModeEnabled = prefs.getBoolean("policy_secure_mode", false)
+        setSecureMode(secureModeEnabled)
+    }
+
+    fun isSecureModeActive(): Boolean {
+        return prefs.getBoolean("policy_secure_mode", false)
+    }
+
+    fun setSecureMode(enabled: Boolean) {
+        if (!dpm.isDeviceOwnerApp(context.packageName)) {
+            Log.w(TAG, "Not device owner — cannot toggle secure mode")
+            return
+        }
+        Log.i(TAG, "Setting secure mode: $enabled")
+
+        val pm = context.packageManager
+        
+        // 1. Get all installed launcher apps
+        val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        val launcherApps = pm.queryIntentActivities(mainIntent, 0)
+        
+        // 2. Identify Camera apps handling image capture
+        val cameraIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+        val cameraApps = pm.queryIntentActivities(cameraIntent, 0).map { it.activityInfo.packageName }
+
+        // 3. Identify Files/Document apps
+        val filesIntent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        val filesApps = pm.queryIntentActivities(filesIntent, 0).map { it.activityInfo.packageName }
+
+        // 4. Keyboard/IME apps
+        val ims = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        val keyboardApps = ims.inputMethodList.map { it.packageName }
+
+        // 5. Default Launcher/Home apps (MUST NOT HIDE!)
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+        }
+        val homeApps = pm.queryIntentActivities(homeIntent, 0).map { it.activityInfo.packageName }
+
+        // 6. Define strict allowlist (packages that should remain visible in Secure Mode)
+        val allowList = mutableSetOf<String>().apply {
+            add(context.packageName) // MDM Agent itself
+            add("com.mdm.chat")       // Chat app
+
+            // ── Camera packages ────────────────────────────────────────────
+            addAll(cameraApps)
+            add("com.oplus.camera")               // OnePlus / Oppo stock camera (modern)
+            add("com.android.camera")             // AOSP camera fallback
+            add("com.android.camera2")            // AOSP camera2 fallback
+            add("com.google.android.GoogleCamera") // Pixel Camera
+            add("com.oneplus.camera")             // Legacy OnePlus camera package
+
+            // ── Files / Documents packages ────────────────────────────────
+            addAll(filesApps)
+            add("com.oplus.filemanager")           // OnePlus/Oppo File Manager (modern)
+            add("com.oneplus.filemanager")         // Legacy OnePlus File Manager
+            add("com.coloros.filemanager")         // ColorOS File Manager
+            add("com.google.android.apps.nbu.files") // Google Files
+            add("com.google.android.documentsui") // Google document picker
+            add("com.android.documentsui")        // AOSP document picker
+
+            // ── OnePlus/Oppo system services (MUST NOT hide) ──────────────
+            add("com.oplus.safecenter")            // Oppo/OnePlus Safe Center (system manager)
+            add("com.coloros.safecenter")          // ColorOS Safe Center
+            add("com.oneplus.security")            // Legacy OnePlus security app
+            add("com.oplus.phonemanager")          // Oppo Phone Manager
+            add("com.heytap.market")               // Oppo App Market (needed for silent installs)
+
+            // ── Phone and Contacts (needed for basic device use) ──────────
+            add("com.android.dialer")
+            add("com.google.android.dialer")
+            add("com.android.contacts")
+            add("com.google.android.contacts")
+            add("com.android.phone")
+            add("com.android.providers.telephony")
+            add("com.android.server.telecom")
+            add("com.oplus.telephony")             // OnePlus telephony services
+
+            // ── Keyboards & launcher apps (NEVER hide system interface!) ──
+            addAll(keyboardApps)
+            addAll(homeApps)
+
+            // ── Critical Android system packages ─────────────────────────
+            add("android")
+            add("com.android.systemui")
+            add("com.android.settings")
+            add("com.google.android.gms")          // Google Play Services (required for auth/push)
+            add("com.google.android.gsf")          // Google Services Framework
+        }
+
+        Log.i(TAG, "Allowlist packages: $allowList")
+
+        // 7. Hide/Unhide packages using DevicePolicyManager
+        for (resolveInfo in launcherApps) {
+            val pkg = resolveInfo.activityInfo.packageName
+            if (enabled) {
+                // If secure mode is enabled, hide anything NOT in the allowlist
+                if (!allowList.contains(pkg)) {
+                    try {
+                        dpm.setApplicationHidden(admin, pkg, true)
+                        Log.d(TAG, "Hidden package: $pkg")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to hide package $pkg: ${e.message}")
+                    }
+                }
+            } else {
+                // If secure mode is disabled, unhide everything
+                try {
+                    dpm.setApplicationHidden(admin, pkg, false)
+                    Log.d(TAG, "Unhidden package: $pkg")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to unhide package $pkg: ${e.message}")
+                }
+            }
+        }
+        
+        // 8. If secure mode is active, make sure standard Lock Task packages are cleared
+        if (enabled) {
+            try {
+                dpm.setLockTaskPackages(admin, emptyArray())
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to clear lock task packages: ${e.message}")
+            }
+        }
+
+        // Save mode state in shared preferences
+        prefs.edit().putBoolean("policy_secure_mode", enabled).apply()
     }
 
     fun startKioskMode(packageName: String = "com.mdm.chat") {

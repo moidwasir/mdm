@@ -30,7 +30,7 @@ if (!$device) jsonResponse(['success' => false, 'message' => 'Device not enrolle
 if (!$device['user_id']) jsonResponse(['success' => false, 'message' => 'No user assigned to this device'], 403);
 
 // Generate a session token for WebSocket auth
-$token = bin2hex(random_bytes(32));
+$token = bin2hex(random_bytes(28));
 $expiry = date('Y-m-d H:i:s', time() + 86400);
 
 // Store token in a temporary table (we reuse enrollment_tokens table with a special marker)

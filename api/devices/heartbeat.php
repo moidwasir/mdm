@@ -57,13 +57,20 @@ if ($device['policy_id']) {
 }
 
 // Get latest app versions for OTA update checks
-$appVersionsStmt = $db->query("SELECT app_name, package_name, version_name, version_code, apk_url FROM app_versions");
-$appVersions = $appVersionsStmt ? $appVersionsStmt->fetchAll() : [];
+// NOTE: the DB column is apk_path (relative), we build the full apk_url here in PHP
+$appVersionsStmt = $db->query("SELECT app_name, package_name, version_name, version_code, apk_path FROM app_versions WHERE is_latest = 1");
+$appVersionsRaw  = $appVersionsStmt ? $appVersionsStmt->fetchAll() : [];
+
+// Build absolute apk_url so the Android client can download without knowing the server base URL
+$appVersions = array_map(function($row) {
+    $row['apk_url'] = rtrim(APP_URL, '/') . '/' . ltrim($row['apk_path'], '/');
+    return $row;
+}, $appVersionsRaw);
 
 jsonResponse([
     'success'      => true,
     'commands'     => $pendingCommands,
-    'policy'       => $policy,
+    'policy'       => formatPolicy($policy),
     'interval'     => HEARTBEAT_INTERVAL,
     'app_versions' => $appVersions,     // OTA version catalog
 ]);

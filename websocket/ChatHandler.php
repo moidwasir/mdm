@@ -28,6 +28,31 @@ class ChatHandler implements MessageComponentInterface
         echo "[MDM Chat] WebSocket server started\n";
     }
 
+    // ── DB liveness guard ─────────────────────────────────────────────────────
+
+    /**
+     * Returns a guaranteed-live database connection.
+     *
+     * MySQL closes idle connections after wait_timeout (default 8 hours).
+     * The WebSocket server runs indefinitely, so it will eventually hit this
+     * timeout. This method runs a lightweight SELECT 1 probe and reconnects
+     * transparently if the connection has gone away.
+     */
+    protected function getDb(): \PDO
+    {
+        try {
+            $this->db->query('SELECT 1');
+        } catch (\PDOException $e) {
+            echo "[MDM Chat] DB connection lost ({$e->getMessage()}), reconnecting...\n";
+            // getDB(true) forces a new PDO connection (see config/database.php)
+            $this->db = \getDB(true);
+            echo "[MDM Chat] DB reconnected successfully\n";
+        }
+        return $this->db;
+    }
+
+    // ── Ratchet interface ─────────────────────────────────────────────────────
+
     public function onOpen(ConnectionInterface $conn): void
     {
         $this->clients->attach($conn, ['user_id' => null, 'authenticated' => false]);
@@ -97,7 +122,7 @@ class ChatHandler implements MessageComponentInterface
         if ($info['user_id'] && isset($this->userConnections[$info['user_id']])) {
             unset($this->userConnections[$info['user_id']]);
             // Update last_seen
-            $this->db->prepare("UPDATE users SET last_seen = NOW() WHERE id = ?")->execute([$info['user_id']]);
+            $this->getDb()->prepare("UPDATE users SET last_seen = NOW() WHERE id = ?")->execute([$info['user_id']]);
         }
         $this->clients->detach($conn);
         echo "[MDM Chat] Connection #{$conn->resourceId} closed\n";
@@ -122,7 +147,7 @@ class ChatHandler implements MessageComponentInterface
         }
 
         // Verify the user exists and is active
-        $stmt = $this->db->prepare("SELECT id, display_name FROM users WHERE id = ? AND is_active = 1");
+        $stmt = $this->getDb()->prepare("SELECT id, display_name FROM users WHERE id = ? AND is_active = 1");
         $stmt->execute([$userId]);
         $user = $stmt->fetch(\PDO::FETCH_ASSOC);
 
@@ -141,7 +166,7 @@ class ChatHandler implements MessageComponentInterface
         $this->userConnections[$userId] = $conn;
 
         // Update last_seen
-        $this->db->prepare("UPDATE users SET last_seen = NOW() WHERE id = ?")->execute([$userId]);
+        $this->getDb()->prepare("UPDATE users SET last_seen = NOW() WHERE id = ?")->execute([$userId]);
 
         $conn->send(json_encode([
             'type'    => 'auth_ok',
@@ -165,8 +190,10 @@ class ChatHandler implements MessageComponentInterface
             return;
         }
 
+        $db = $this->getDb();
+
         // Verify membership
-        $mem = $this->db->prepare("SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?");
+        $mem = $db->prepare("SELECT id FROM conversation_members WHERE conversation_id = ? AND user_id = ?");
         $mem->execute([$convId, $userId]);
         if (!$mem->fetch()) {
             $from->send(json_encode(['type' => 'error', 'message' => 'Not a member of this conversation']));
@@ -174,14 +201,14 @@ class ChatHandler implements MessageComponentInterface
         }
 
         // Persist message
-        $ins = $this->db->prepare("INSERT INTO messages (conversation_id, sender_id, content, message_type, media_url, reply_to_id) VALUES (?,?,?,?,?,?)");
+        $ins = $db->prepare("INSERT INTO messages (conversation_id, sender_id, content, message_type, media_url, reply_to_id) VALUES (?,?,?,?,?,?)");
         $ins->execute([$convId, $userId, $content, $type, $data['media_url'] ?? null, $replyTo]);
-        $msgId = (int)$this->db->lastInsertId();
+        $msgId = (int)$db->lastInsertId();
 
-        $this->db->prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?")->execute([$convId]);
+        $db->prepare("UPDATE conversations SET updated_at = NOW() WHERE id = ?")->execute([$convId]);
 
         // Build full message payload
-        $msg = $this->db->prepare("SELECT m.*, u.display_name as sender_name, u.avatar as sender_avatar FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?");
+        $msg = $db->prepare("SELECT m.*, u.display_name as sender_name, u.avatar as sender_avatar FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?");
         $msg->execute([$msgId]);
         $message = $msg->fetch(\PDO::FETCH_ASSOC);
 
@@ -191,7 +218,7 @@ class ChatHandler implements MessageComponentInterface
         $this->broadcastToConversation($convId, null, rawPayload: $payload);
 
         // Push FCM notification to OFFLINE members (not connected via WebSocket)
-        $offlineMembers = $this->db->prepare("
+        $offlineMembers = $db->prepare("
             SELECT u.fcm_token FROM conversation_members cm
             JOIN users u ON u.id = cm.user_id
             WHERE cm.conversation_id = ? AND cm.user_id != ? AND u.fcm_token IS NOT NULL AND u.fcm_token != ''
@@ -200,7 +227,7 @@ class ChatHandler implements MessageComponentInterface
         $offlineTokens = array_column($offlineMembers->fetchAll(\PDO::FETCH_ASSOC), 'fcm_token');
 
         // Only push to members NOT currently connected via WebSocket
-        $offlineTokensFiltered = array_filter($offlineTokens, function($token) use ($offlineMembers) {
+        $offlineTokensFiltered = array_filter($offlineTokens, function ($token) {
             return true; // sendFcmNotification handles deduplication
         });
 
@@ -222,14 +249,15 @@ class ChatHandler implements MessageComponentInterface
         $msgId  = (int)($data['message_id'] ?? 0);
         if (!$convId || !$msgId) return;
 
-        $this->db->prepare("UPDATE conversation_members SET last_read_message_id = ? WHERE conversation_id = ? AND user_id = ?")->execute([$msgId, $convId, $userId]);
-        $this->db->prepare("UPDATE messages SET status = 'read' WHERE conversation_id = ? AND sender_id != ? AND id <= ?")->execute([$convId, $userId, $msgId]);
+        $db = $this->getDb();
+        $db->prepare("UPDATE conversation_members SET last_read_message_id = ? WHERE conversation_id = ? AND user_id = ?")->execute([$msgId, $convId, $userId]);
+        $db->prepare("UPDATE messages SET status = 'read' WHERE conversation_id = ? AND sender_id != ? AND id <= ?")->execute([$convId, $userId, $msgId]);
     }
 
     private function broadcastToConversation(int $convId, ?array $data = null, ?ConnectionInterface $exclude = null, ?string $rawPayload = null): void
     {
         // Get all members
-        $members = $this->db->prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?");
+        $members = $this->getDb()->prepare("SELECT user_id FROM conversation_members WHERE conversation_id = ?");
         $members->execute([$convId]);
         $memberIds = array_column($members->fetchAll(\PDO::FETCH_ASSOC), 'user_id');
 

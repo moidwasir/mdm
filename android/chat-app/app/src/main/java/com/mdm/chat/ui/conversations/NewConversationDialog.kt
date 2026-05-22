@@ -48,6 +48,15 @@ fun NewConversationDialog(
                 ApiClient.service.listConversations(session.userId, "users")
             }
             // Parse user list from conversations response
+            users = response.conversations?.map { conv ->
+                com.mdm.chat.data.models.User(
+                    id = conv.id,
+                    username = conv.lastMessage ?: "",
+                    displayName = conv.name ?: "",
+                    avatar = conv.avatar,
+                    lastSeen = null
+                )
+            } ?: emptyList()
         } catch (e: Exception) { /* show all users via direct API */ }
         finally { isLoading = false }
     }

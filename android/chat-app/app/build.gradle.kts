@@ -23,8 +23,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-        buildConfigField("String", "SERVER_URL", "\"http://10.0.2.2/mdm\"")  // 10.0.2.2 = host Mac from emulator
-        buildConfigField("String", "WS_URL",     "\"ws://10.0.2.2:8080\"")   // WebSocket on host Mac
+        buildConfigField("String", "SERVER_URL", "\"http://187.77.118.52\"")
+        buildConfigField("String", "WS_URL",     "\"ws://187.77.118.52:8080\"")
     }
 
     signingConfigs {
@@ -38,7 +38,7 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
+            // Keep production package name to match google-services.json
         }
         release {
             isMinifyEnabled   = true
@@ -58,6 +58,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling)
@@ -71,7 +72,8 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
-    implementation(libs.okhttp)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation(libs.coroutines.android)
     implementation(libs.coil.compose)
     implementation(libs.datastore)

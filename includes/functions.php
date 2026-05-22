@@ -212,3 +212,29 @@ function getFlashMessage(): ?array {
     }
     return null;
 }
+
+/**
+ * Format policy array to ensure correct types for mobile JSON clients
+ */
+function formatPolicy($policy): ?array {
+    if (!$policy) return null;
+    return [
+        'id' => (int)$policy['id'],
+        'name' => $policy['name'],
+        'description' => $policy['description'],
+        'allowed_apps' => is_string($policy['allowed_apps']) ? json_decode($policy['allowed_apps'], true) : $policy['allowed_apps'],
+        'kiosk_mode' => (bool)$policy['kiosk_mode'],
+        'kiosk_app' => $policy['kiosk_app'] ?? 'com.mdm.chat',
+        'disable_play_store' => (bool)$policy['disable_play_store'],
+        'disable_camera' => (bool)$policy['disable_camera'],
+        'disable_bluetooth' => (bool)$policy['disable_bluetooth'],
+        'disable_wifi_config' => (bool)$policy['disable_wifi_config'],
+        'disable_usb' => (bool)$policy['disable_usb'],
+        'disable_screen_capture' => (bool)$policy['disable_screen_capture'],
+        'disable_factory_reset' => (bool)$policy['disable_factory_reset'],
+        'password_policy' => $policy['password_policy'] ?? 'pin',
+        'min_password_length' => (int)($policy['min_password_length'] ?? 4),
+        'auto_lock_timeout' => (int)($policy['auto_lock_timeout'] ?? 300),
+        'is_default' => (bool)$policy['is_default']
+    ];
+}

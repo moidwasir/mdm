@@ -33,11 +33,19 @@ class DeviceAdminReceiver : DeviceAdminReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        // Handle boot completed — restart heartbeat service
+        // Handle boot completed — restart heartbeat service only if already enrolled.
+        // If the device is not yet enrolled (e.g. first boot after provisioning), do NOT
+        // start the service — MainActivity will handle enrollment and then start the service.
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            Log.i(TAG, "Boot completed — restarting heartbeat service")
-            val serviceIntent = Intent(context, HeartbeatService::class.java)
-            context.startForegroundService(serviceIntent)
+            val prefs = context.getSharedPreferences("mdm", Context.MODE_PRIVATE)
+            val isEnrolled = prefs.getBoolean("enrolled", false)
+            if (isEnrolled) {
+                Log.i(TAG, "Boot completed — device enrolled, restarting heartbeat service")
+                val serviceIntent = Intent(context, HeartbeatService::class.java)
+                context.startForegroundService(serviceIntent)
+            } else {
+                Log.w(TAG, "Boot completed — device not yet enrolled, skipping heartbeat start")
+            }
         }
     }
 }

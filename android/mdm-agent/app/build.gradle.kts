@@ -21,7 +21,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-        buildConfigField("String", "SERVER_URL", "\"http://10.0.2.2/mdm\"")  // 10.0.2.2 = host Mac from emulator
+        buildConfigField("String", "SERVER_URL", "\"http://187.77.118.52\"")
     }
 
     // Release signing config using keystore

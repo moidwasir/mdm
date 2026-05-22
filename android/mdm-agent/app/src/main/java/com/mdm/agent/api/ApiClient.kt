@@ -81,7 +81,7 @@ interface MdmApiService {
 
 object ApiClient {
     val service: MdmApiService by lazy {
-        val logger = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
+        val logger = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY }
         val client = OkHttpClient.Builder()
             .addInterceptor(logger)
             .connectTimeout(30, TimeUnit.SECONDS)

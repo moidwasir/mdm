@@ -196,9 +196,30 @@ fun AuthScreen(onAuthenticated: (AuthSession) -> Unit) {
 
 @Suppress("MissingPermission")
 private fun getImei(context: Context): String {
-    return try {
+    val raw = try {
         val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
         @Suppress("DEPRECATION")
-        tm.deviceId ?: android.os.Build.SERIAL
-    } catch (e: Exception) { android.os.Build.SERIAL }
+        val id = tm.deviceId
+        if (!id.isNullOrEmpty() && id != "unknown") {
+            id
+        } else {
+            @Suppress("DEPRECATION")
+            val serial = android.os.Build.SERIAL
+            if (!serial.isNullOrEmpty() && serial != "unknown") serial else ""
+        }
+    } catch (e: Exception) {
+        @Suppress("DEPRECATION")
+        val serial = try { android.os.Build.SERIAL } catch (se: Exception) { "" }
+        if (!serial.isNullOrEmpty() && serial != "unknown") serial else ""
+    }
+
+    // If raw is a valid 15-digit numeric string, return it
+    if (raw.matches(Regex("^\\d{15}$"))) {
+        return raw
+    }
+
+    // Otherwise, construct a stable 15-digit dummy IMEI starting with 12345
+    val hash = raw.hashCode().toString().replace("-", "")
+    val paddedHash = hash.padEnd(10, '0').take(10)
+    return "12345$paddedHash"
 }
