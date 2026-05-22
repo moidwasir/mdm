@@ -7,6 +7,7 @@ import android.net.ConnectivityManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.mdm.agent.api.ApiClient
@@ -26,25 +27,84 @@ class HeartbeatService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val prefs by lazy { getSharedPreferences("mdm", Context.MODE_PRIVATE) }
 
+    /**
+     * Guard flag: ensures only ONE heartbeat coroutine loop runs at a time,
+     * regardless of how many times onStartCommand is called (e.g. START_STICKY
+     * redelivery, MainActivity calling startForegroundService multiple times).
+     */
+    private var isLoopRunning = false
+
+    /**
+     * WakeLock to keep the CPU awake during the heartbeat network call.
+     * OnePlus HANS freezes the process when the screen is off — the WakeLock
+     * prevents the network call from being interrupted mid-flight.
+     */
+    private var wakeLock: PowerManager.WakeLock? = null
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIF_ID, buildNotification())
-        Log.i(TAG, "Heartbeat service started")
+        Log.i(TAG, "Heartbeat service created")
+
+        // Acquire a partial WakeLock to survive screen-off on OxygenOS/ColorOS.
+        // The lock is released after each heartbeat to preserve battery.
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "MDMAgent::HeartbeatWakeLock"
+        ).apply { setReferenceCounted(false) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        scope.launch {
-            while (isActive) {
-                sendHeartbeat()
-                delay(INTERVAL_MS)
+        Log.i(TAG, "onStartCommand startId=$startId, loopRunning=$isLoopRunning")
+
+        // Guard: if the loop is already running, don't start a second one.
+        // This is the fix for lastStartId=4 causing 4 concurrent heartbeat loops.
+        if (!isLoopRunning) {
+            isLoopRunning = true
+            scope.launch {
+                try {
+                    while (isActive) {
+                        acquireWakeLock()
+                        try {
+                            sendHeartbeat()
+                        } finally {
+                            releaseWakeLock()
+                        }
+                        delay(INTERVAL_MS)
+                    }
+                } finally {
+                    isLoopRunning = false
+                }
             }
         }
+
         return START_STICKY
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            wakeLock?.acquire(30_000L) // 30s max — more than enough for a heartbeat
+        } catch (e: Exception) {
+            Log.w(TAG, "WakeLock acquire failed: ${e.message}")
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) wakeLock?.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "WakeLock release failed: ${e.message}")
+        }
     }
 
     private suspend fun sendHeartbeat() {
         val imei = prefs.getString("imei", "") ?: return
+        if (imei.isEmpty()) {
+            Log.w(TAG, "IMEI not set — skipping heartbeat")
+            return
+        }
         try {
             val response = ApiClient.service.heartbeat(HeartbeatRequest(
                 imei              = imei,
@@ -80,7 +140,9 @@ class HeartbeatService : Service() {
                     }
                 }
 
-                updateNotification("Last sync: ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
+                val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                updateNotification("Last sync: $timeStr")
+                Log.i(TAG, "Heartbeat OK at $timeStr")
             }
         } catch (e: Exception) {
             Log.w(TAG, "Heartbeat failed: ${e.message}")
@@ -124,7 +186,10 @@ class HeartbeatService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        isLoopRunning = false
+        releaseWakeLock()
         scope.cancel()
         super.onDestroy()
+        Log.i(TAG, "Heartbeat service destroyed")
     }
 }
