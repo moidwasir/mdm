@@ -70,21 +70,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 if ($moved) {
                     chmod($destPath, 0644);
-                    $url = APP_URL . '/apk/' . $targetFilename;
 
-                    // Insert or update DB version record
-                    $db->prepare("
-                        INSERT INTO app_versions (app_name, package_name, version_name, version_code, apk_url)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON DUPLICATE KEY UPDATE
-                            app_name = VALUES(app_name),
-                            version_name = VALUES(version_name),
-                            version_code = VALUES(version_code),
-                            apk_url = VALUES(apk_url)
-                    ")->execute([$appName, $packageName, $versionName, $versionCode, $url]);
+                    try {
+                        $db->beginTransaction();
 
-                    $success = "✅ APK uploaded! v{$versionName} — devices will auto-update on next heartbeat.";
-                    logAction('ota_upload', "Uploaded $appName v{$versionName} ({$versionCode}) → {$destPath}");
+                        // Mark previous versions as not latest
+                        $db->prepare("UPDATE app_versions SET is_latest = 0 WHERE package_name = ?")->execute([$packageName]);
+
+                        // Insert the new version record
+                        $db->prepare("
+                            INSERT INTO app_versions (app_name, package_name, version_name, version_code, apk_path, apk_size, is_latest, uploaded_by)
+                            VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+                        ")->execute([
+                            $appName,
+                            $packageName,
+                            $versionName,
+                            $versionCode,
+                            'apk/' . $targetFilename,
+                            $file['size'],
+                            $currentAdmin['id']
+                        ]);
+
+                        $db->commit();
+
+                        $success = "✅ APK uploaded! v{$versionName} — devices will auto-update on next heartbeat.";
+                        logAction('ota_upload', "Uploaded $appName v{$versionName} ({$versionCode}) → {$destPath}");
+                    } catch (Exception $dbEx) {
+                        if ($db->inTransaction()) {
+                            $db->rollBack();
+                        }
+                        $error = "Database error saving APK: " . $dbEx->getMessage();
+                    }
                 } else {
                     $dirWritable = is_writable($apkDir) ? 'writable' : 'NOT writable';
                     $tmpExists   = file_exists($file['tmp_name']) ? 'exists' : 'missing';
