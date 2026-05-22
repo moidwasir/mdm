@@ -106,19 +106,30 @@ class HeartbeatService : Service() {
             return
         }
         try {
+            val netType = getNetworkType()
+            val isLocked = getIsLockedState()
+
             val response = ApiClient.service.heartbeat(HeartbeatRequest(
                 imei              = imei,
                 battery_level     = getBatteryLevel(),
                 ip_address        = getLocalIp(),
                 os_version        = Build.VERSION.RELEASE,
-                mdm_agent_version = BuildConfig.VERSION_NAME
+                mdm_agent_version = BuildConfig.VERSION_NAME,
+                network_type      = netType,
+                is_locked         = isLocked
             ))
 
             if (response.success) {
                 // 1. Process pending remote commands (lock / wipe / ring etc.)
                 response.commands?.forEach { cmd ->
-                    CommandHandler(this@HeartbeatService, PolicyManager(this@HeartbeatService))
-                        .handle(cmd)
+                    scope.launch {
+                        try {
+                            CommandHandler(this@HeartbeatService, PolicyManager(this@HeartbeatService))
+                                .handle(cmd)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error processing command: ${cmd.command_type}", e)
+                        }
+                    }
                 }
 
                 // 2. OTA version check — update Chat App if server has a newer build
@@ -146,6 +157,46 @@ class HeartbeatService : Service() {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Heartbeat failed: ${e.message}")
+        }
+    }
+
+    private fun getIsLockedState(): Boolean {
+        // First check our prefs flag set by LockdownActivity
+        if (prefs.getBoolean("is_locked_state", false)) {
+            return true
+        }
+        // Fallback to standard keyguard manager check
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        return km.isKeyguardLocked
+    }
+
+    private fun getNetworkType(): String {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val network = cm.activeNetwork ?: return "Offline"
+                val capabilities = cm.getNetworkCapabilities(network) ?: return "Offline"
+                return when {
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "WiFi"
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "Cellular"
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+                    else -> "Online"
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                val activeNetworkInfo = cm.activeNetworkInfo
+                if (activeNetworkInfo == null || !activeNetworkInfo.isConnected) {
+                    return "Offline"
+                }
+                @Suppress("DEPRECATION")
+                return when (activeNetworkInfo.type) {
+                    ConnectivityManager.TYPE_WIFI -> "WiFi"
+                    ConnectivityManager.TYPE_MOBILE -> "Cellular"
+                    else -> "Online"
+                }
+            }
+        } catch (e: Exception) {
+            return "Unknown"
         }
     }
 

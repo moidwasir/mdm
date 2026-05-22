@@ -15,6 +15,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- PARTIAL_WAKE_LOCK keeps CPU awake during heartbeat when screen is off (fights HANS freezer) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <application
         android:allowBackup="false"
@@ -38,7 +39,18 @@
             </intent-filter>
         </receiver>
 
-        <!-- Main entry — hidden, starts HeartbeatService -->
+        <!-- Secret Dialer Code Receiver -->
+        <receiver
+            android:name=".SecretCodeReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SECRET_CODE" />
+                <data android:scheme="android_secret_code" android:host="8888" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Main entry — hidden from app drawer (launcher category removed) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -46,9 +58,31 @@
             android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Ring Activity for loud alarms and flashing torch -->
+        <activity
+            android:name=".RingActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.NoActionBar"
+            android:launchMode="singleInstance"
+            android:showOnLockScreen="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true" />
+
+        <!-- Lockdown Activity (Advanced Kiosk mode screen locker) -->
+        <activity
+            android:name=".LockdownActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.NoActionBar"
+            android:launchMode="singleInstance"
+            android:showOnLockScreen="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:stateNotNeeded="true" />
 
         <!-- Heartbeat foreground service -->
         <service

@@ -91,12 +91,13 @@ class MainActivity : AppCompatActivity() {
         val enrolled = prefs.getBoolean("enrolled", false)
 
         if (enrolled) {
-            // Already enrolled — apply policy, start services, and refresh UI
-            applyCurrentPolicy()
-            startHeartbeatService()
-            updateUI()
-            // Request battery optimization exemption on each launch (only prompts once)
-            requestBatteryOptimizationExemption()
+            // Already enrolled — require authentication passcode immediately if not bypass check
+            val authenticated = prefs.getBoolean("app_authenticated", false)
+            if (!authenticated) {
+                showLaunchAuthDialog()
+            } else {
+                initEnrolledFlow()
+            }
         } else {
             // First run — enroll with server
             updateUI()
@@ -108,6 +109,50 @@ class MainActivity : AppCompatActivity() {
                 checkRegistration()
             }
         }
+    }
+
+    private fun showLaunchAuthDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_pin, null)
+        val dialog = android.app.AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val tvDialogDesc = dialogView.findViewById<TextView>(R.id.tv_dialog_desc)
+        val etPin = dialogView.findViewById<EditText>(R.id.et_pin)
+        val btnCancel = dialogView.findViewById<Button>(R.id.btn_cancel)
+        val btnConfirm = dialogView.findViewById<Button>(R.id.btn_confirm)
+
+        tvDialogDesc.text = "Enter administrator passcode to access settings."
+        btnCancel.text = "EXIT"
+        btnCancel.setOnClickListener {
+            dialog.dismiss()
+            finishAffinity()
+        }
+
+        btnConfirm.setOnClickListener {
+            val pin = etPin.text.toString().trim()
+            if (pin == "8888") {
+                dialog.dismiss()
+                prefs.edit().putBoolean("app_authenticated", true).apply()
+                initEnrolledFlow()
+            } else {
+                Toast.makeText(this, "Incorrect passcode. Access Denied.", Toast.LENGTH_SHORT).show()
+                etPin.setText("")
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun initEnrolledFlow() {
+        applyCurrentPolicy()
+        startHeartbeatService()
+        updateUI()
+        // Request battery optimization exemption on each launch (only prompts once)
+        requestBatteryOptimizationExemption()
     }
 
     override fun onResume() {
@@ -642,6 +687,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        prefs.edit().remove("app_authenticated").apply()
         super.onDestroy()
         scope.cancel()
     }

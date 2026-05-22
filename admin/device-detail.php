@@ -29,6 +29,7 @@ include __DIR__ . '/../includes/header.php';
     </div>
     <div style="display:flex;gap:8px;">
         <button class="btn btn-secondary btn-sm" onclick="sendCommand(<?= $id ?>, 'lock')"><i class="fas fa-lock"></i> Lock</button>
+        <button class="btn btn-secondary btn-sm" onclick="sendCommand(<?= $id ?>, 'unlock')"><i class="fas fa-unlock"></i> Unlock</button>
         <button class="btn btn-secondary btn-sm" onclick="sendCommand(<?= $id ?>, 'ring')"><i class="fas fa-bell"></i> Ring</button>
         <button class="btn btn-danger btn-sm" onclick="sendCommand(<?= $id ?>, 'wipe')"><i class="fas fa-eraser"></i> Wipe</button>
     </div>
@@ -50,10 +51,12 @@ include __DIR__ . '/../includes/header.php';
             <?php
             $fields = [
                 'IMEI' => $device['imei'], 'Status' => $device['enrollment_status'],
+                'Lock State' => $device['is_locked'] ? 'Locked 🔒' : 'Unlocked 🔓',
                 'Manufacturer' => $device['manufacturer'], 'Model' => $device['model'],
                 'OS Version' => $device['os_version'], 'Policy' => $device['policy_name'] ?? 'None',
                 'Assigned User' => $device['user_name'] ?? 'Unassigned', 'IP Address' => $device['ip_address'],
-                'WiFi' => $device['wifi_ssid'], 'Enrolled' => $device['enrolled_at'] ? date('M j, Y H:i', strtotime($device['enrolled_at'])) : '—',
+                'Network Type' => $device['network_type'] ?: '—', 'WiFi' => $device['wifi_ssid'],
+                'Enrolled' => $device['enrolled_at'] ? date('M j, Y H:i', strtotime($device['enrolled_at'])) : '—',
             ];
             foreach ($fields as $label => $val): ?>
                 <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-color);">
@@ -82,16 +85,79 @@ include __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
+<!-- Command History -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header"><h3 class="card-title">Command History</h3></div>
+    <?php if (empty($deviceCommands)): ?>
+        <div class="empty-state" style="padding:30px;"><i class="fas fa-terminal"></i><h3>No commands issued</h3></div>
+    <?php else: ?>
+        <div class="table-responsive">
+            <table class="table" style="width:100%;border-collapse:collapse;margin-top:10px;">
+                <thead>
+                    <tr style="text-align:left;border-bottom:2px solid var(--border-color);color:var(--text-muted);font-size:0.85rem;">
+                        <th style="padding:10px 8px;">Command</th>
+                        <th style="padding:10px 8px;">Issued By</th>
+                        <th style="padding:10px 8px;">Status</th>
+                        <th style="padding:10px 8px;">Issued At</th>
+                        <th style="padding:10px 8px;">Executed At</th>
+                        <th style="padding:10px 8px;">Details / Feedback</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($deviceCommands as $cmd): ?>
+                        <tr style="border-bottom:1px solid var(--border-color);font-size:0.85rem;">
+                            <td style="padding:12px 8px;"><strong><?= strtoupper(sanitize($cmd['command_type'])) ?></strong></td>
+                            <td style="padding:12px 8px;"><?= sanitize($cmd['admin_name'] ?: 'System') ?></td>
+                            <td style="padding:12px 8px;">
+                                <?php
+                                $statusClass = 'badge-secondary';
+                                if ($cmd['status'] === 'pending') $statusClass = 'badge-warning';
+                                elseif ($cmd['status'] === 'sent') $statusClass = 'badge-info';
+                                elseif ($cmd['status'] === 'executed') $statusClass = 'badge-success';
+                                elseif ($cmd['status'] === 'failed') $statusClass = 'badge-danger';
+                                ?>
+                                <span class="badge <?= $statusClass ?>" style="padding:4px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;display:inline-block;"><?= strtoupper(sanitize($cmd['status'])) ?></span>
+                            </td>
+                            <td style="padding:12px 8px;color:var(--text-muted);"><?= date('M j, Y H:i:s', strtotime($cmd['created_at'])) ?></td>
+                            <td style="padding:12px 8px;color:var(--text-muted);"><?= $cmd['executed_at'] ? date('M j, Y H:i:s', strtotime($cmd['executed_at'])) : '—' ?></td>
+                            <td style="padding:12px 8px;">
+                                <?php if ($cmd['status'] === 'failed'): ?>
+                                    <span style="color:#EF4444;font-weight:500;"><i class="fas fa-circle-exclamation"></i> Failed: <?= sanitize($cmd['error_message']) ?></span>
+                                <?php elseif ($cmd['status'] === 'executed'): ?>
+                                    <span style="color:#10B981;font-weight:500;"><i class="fas fa-circle-check"></i> Executed successfully</span>
+                                <?php elseif ($cmd['status'] === 'sent'): ?>
+                                    <span style="color:#3B82F6;font-weight:500;"><i class="fas fa-spinner fa-spin"></i> Delivered to device</span>
+                                <?php else: ?>
+                                    <span style="color:var(--text-muted);">Awaiting queue...</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</div>
+
 <script>
 function sendCommand(deviceId, type) {
-    const messages = {lock:'Lock this device?', ring:'Ring this device?', wipe:'⚠️ WIPE this device? This will erase ALL data!'};
+    const messages = {
+        lock: 'Lock this device in Lockdown Mode?',
+        unlock: 'Unlock this device from Lockdown Mode?',
+        ring: 'Ring this device with a loud alarm?',
+        wipe: '⚠️ WIPE this device? This will permanently erase ALL data!'
+    };
     if (!confirm(messages[type])) return;
     fetch('<?= APP_URL ?>/api/devices/command.php', {
         method:'POST', headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
         body: JSON.stringify({device_id: deviceId, command_type: type})
     }).then(r=>r.json()).then(d=>{
-        if(d.success) showToast('Command sent!','success');
-        else showToast(d.message,'error');
+        if(d.success) {
+            showToast('Command sent!','success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(d.message,'error');
+        }
     });
 }
 </script>

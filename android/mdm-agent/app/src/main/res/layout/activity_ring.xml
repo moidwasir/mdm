@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/dashboard_bg"
+    android:keepScreenOn="true"
+    android:padding="24dp">
+
+    <!-- Red Alert Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <!-- Pulsing Alert icon / visual indicator -->
+        <ImageView
+            android:id="@+id/iv_alarm_bell"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:src="@android:drawable/ic_lock_lock"
+            android:tint="#EF4444" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="ADMINISTRATOR ALERT"
+            android:textColor="#EF4444"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="THIS DEVICE IS BEING TRACKED / LOUD BELL INITIATED"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:gravity="center" />
+
+        <!-- Dismiss button -->
+        <Button
+            android:id="@+id/btn_dismiss_alarm"
+            android:layout_width="200dp"
+            android:layout_height="54dp"
+            android:layout_marginTop="40dp"
+            android:background="@drawable/accent_btn_bg"
+            android:text="DISMISS ALARM"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+</RelativeLayout>

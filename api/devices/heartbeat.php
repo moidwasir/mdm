@@ -25,13 +25,15 @@ if (!$device) {
 }
 
 // Update heartbeat data
-$update = $db->prepare("UPDATE devices SET last_heartbeat = NOW(), is_online = 1, battery_level = ?, ip_address = ?, storage_free_mb = ?, os_version = ?, wifi_ssid = ?, latitude = ?, longitude = ? WHERE id = ?");
+$update = $db->prepare("UPDATE devices SET last_heartbeat = NOW(), is_online = 1, battery_level = ?, ip_address = ?, storage_free_mb = ?, os_version = ?, wifi_ssid = ?, network_type = ?, is_locked = ?, latitude = ?, longitude = ? WHERE id = ?");
 $update->execute([
     $input['battery_level'] ?? null,
     $input['ip_address'] ?? $_SERVER['REMOTE_ADDR'],
     $input['storage_free_mb'] ?? null,
     $input['os_version'] ?? null,
     $input['wifi_ssid'] ?? null,
+    $input['network_type'] ?? null,
+    isset($input['is_locked']) ? (int)$input['is_locked'] : 0,
     $input['latitude'] ?? null,
     $input['longitude'] ?? null,
     $device['id']
@@ -41,6 +43,15 @@ $update->execute([
 $cmds = $db->prepare("SELECT id, command_type, payload FROM device_commands WHERE device_id = ? AND status = 'pending' ORDER BY created_at ASC");
 $cmds->execute([$device['id']]);
 $pendingCommands = $cmds->fetchAll();
+
+// Decode payload JSON string to prevent double serialization
+foreach ($pendingCommands as &$cmd) {
+    if (isset($cmd['payload']) && is_string($cmd['payload'])) {
+        $cmd['payload'] = json_decode($cmd['payload'], true);
+    }
+}
+unset($cmd);
+
 
 // Mark commands as sent
 if ($pendingCommands) {

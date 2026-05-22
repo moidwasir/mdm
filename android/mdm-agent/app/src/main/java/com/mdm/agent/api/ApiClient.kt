@@ -31,8 +31,21 @@ data class HeartbeatRequest(
     val mdm_agent_version: String?,
     val storage_free_mb: Long? = null,
     val wifi_ssid: String?    = null,
+    val network_type: String? = null,
+    val is_locked: Boolean    = false,
     val latitude: Double?     = null,
     val longitude: Double?     = null
+)
+
+data class UpdateCommandStatusRequest(
+    val command_id: Int,
+    val status: String,
+    val error_message: String? = null
+)
+
+data class CommandStatusResponse(
+    val success: Boolean,
+    val message: String? = null
 )
 
 // ── Response bodies ───────────────────────────────────────────────────────────
@@ -88,6 +101,9 @@ interface MdmApiService {
 
     @POST("api/devices/heartbeat.php")
     suspend fun heartbeat(@Body request: HeartbeatRequest): HeartbeatResponse
+
+    @POST("api/devices/update-command.php")
+    suspend fun updateCommandStatus(@Body request: UpdateCommandStatusRequest): CommandStatusResponse
 }
 
 // ── Singleton client ──────────────────────────────────────────────────────────
