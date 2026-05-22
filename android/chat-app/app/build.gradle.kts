@@ -29,10 +29,10 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile     = file(keystoreProps["CHAT_STORE_FILE"] ?: "../keystore/chat-app-release.keystore")
-            storePassword = keystoreProps["CHAT_STORE_PASSWORD"] as String? ?: ""
-            keyAlias      = keystoreProps["CHAT_KEY_ALIAS"] as String? ?: "chat-app"
-            keyPassword   = keystoreProps["CHAT_KEY_PASSWORD"] as String? ?: ""
+            storeFile     = rootProject.file(keystoreProps.getProperty("CHAT_STORE_FILE") ?: "../keystore/chat-app-release.keystore")
+            storePassword = keystoreProps.getProperty("CHAT_STORE_PASSWORD") ?: ""
+            keyAlias      = keystoreProps.getProperty("CHAT_KEY_ALIAS") ?: "chat-app"
+            keyPassword   = keystoreProps.getProperty("CHAT_KEY_PASSWORD") ?: ""
         }
     }
 
