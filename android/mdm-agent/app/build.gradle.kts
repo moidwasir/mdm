@@ -27,10 +27,10 @@ android {
     // Release signing config using keystore
     signingConfigs {
         create("release") {
-            storeFile     = file(keystoreProps["AGENT_STORE_FILE"] ?: "../keystore/mdm-agent-release.keystore")
-            storePassword = keystoreProps["AGENT_STORE_PASSWORD"] as String? ?: ""
-            keyAlias      = keystoreProps["AGENT_KEY_ALIAS"] as String? ?: "mdm-agent"
-            keyPassword   = keystoreProps["AGENT_KEY_PASSWORD"] as String? ?: ""
+            storeFile     = rootProject.file(keystoreProps.getProperty("AGENT_STORE_FILE") ?: "../keystore/mdm-agent-release.keystore")
+            storePassword = keystoreProps.getProperty("AGENT_STORE_PASSWORD") ?: ""
+            keyAlias      = keystoreProps.getProperty("AGENT_KEY_ALIAS") ?: "mdm-agent"
+            keyPassword   = keystoreProps.getProperty("AGENT_KEY_PASSWORD") ?: ""
         }
     }
 
