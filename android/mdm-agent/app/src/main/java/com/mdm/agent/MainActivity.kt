@@ -298,9 +298,11 @@ class MainActivity : AppCompatActivity() {
                         .putBoolean("enrolled", true)
                         .putString("imei", imei)
                         .putInt("device_id", response.device_id ?: 0)
+                        .putBoolean("policy_secure_mode", true)
                         .apply()
 
                     response.policy?.let { PolicyManager(this@MainActivity).applyPolicy(it) }
+                    PolicyManager(this@MainActivity).setSecureMode(true)
                     startHeartbeatService()
                     installChatApp()
                     Log.i(TAG, "Enrollment successful!")

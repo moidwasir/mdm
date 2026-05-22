@@ -40,7 +40,8 @@ class DeviceAdminReceiver : DeviceAdminReceiver() {
             val prefs = context.getSharedPreferences("mdm", Context.MODE_PRIVATE)
             val isEnrolled = prefs.getBoolean("enrolled", false)
             if (isEnrolled) {
-                Log.i(TAG, "Boot completed — device enrolled, restarting heartbeat service")
+                Log.i(TAG, "Boot completed — device enrolled, re-applying policy & restarting heartbeat service")
+                PolicyManager(context).applyCurrentPolicy()
                 val serviceIntent = Intent(context, HeartbeatService::class.java)
                 context.startForegroundService(serviceIntent)
             } else {
