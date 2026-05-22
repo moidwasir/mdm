@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvActivationImei: TextView
     private lateinit var btnActivateSecureMode: Button
     private lateinit var cardActivation: View
+    private lateinit var cardAppsDrawer: View
     private lateinit var layoutWorkspace: View
     private lateinit var layoutSettings: View
     private lateinit var btnTabWorkspace: TextView
@@ -112,6 +113,7 @@ class MainActivity : AppCompatActivity() {
         tvActivationImei = findViewById(R.id.tv_activation_imei)
         btnActivateSecureMode = findViewById(R.id.btn_activate_secure_mode)
         cardActivation = findViewById(R.id.card_activation)
+        cardAppsDrawer = findViewById(R.id.card_apps_drawer)
         layoutWorkspace = findViewById(R.id.layout_workspace)
         layoutSettings = findViewById(R.id.layout_settings)
         btnTabWorkspace = findViewById(R.id.btn_tab_workspace)
@@ -194,11 +196,7 @@ class MainActivity : AppCompatActivity() {
                         startHeartbeatService()
                         updateUI()
                     } else {
-                        // Show activation card
-                        tvActivationImei.text = "IMEI: $imei"
-                        cardActivation.visibility = View.VISIBLE
-                        layoutWorkspace.visibility = View.GONE
-                        tvWorkspaceLabel.text = "ACTIVATION REQUIRED"
+                        updateUI()
                     }
                 } else {
                     Toast.makeText(this@MainActivity, response.message ?: "Device not registered", Toast.LENGTH_LONG).show()
@@ -234,11 +232,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUI() {
         val enrolled = prefs.getBoolean("enrolled", false)
-        val imei = prefs.getString("imei", "Unavailable")
+        val prefsImei = prefs.getString("imei", "") ?: ""
+        val imei = if (prefsImei.isNotEmpty()) prefsImei else getImei()
         val deviceId = prefs.getInt("device_id", 0)
 
         tvImei.text = imei
         tvDeviceId.text = if (deviceId > 0) "#$deviceId" else "Offline (Awaiting Server ID)"
+        tvActivationImei.text = "IMEI: $imei"
 
         val pm = PolicyManager(this)
         val isSecureMode = pm.isSecureModeActive()
@@ -264,6 +264,13 @@ class MainActivity : AppCompatActivity() {
             tvStatusTitle.text = "AWAITING ENROLLMENT..."
             tvStatusTitle.setTextColor(Color.parseColor("#F59E0B"))
             tvStatusDesc.text = "Device is not yet enrolled with the MDM administration server. Please register the device IMEI on the admin portal."
+            cardActivation.visibility = View.VISIBLE
+            cardAppsDrawer.visibility = View.GONE
+            tvWorkspaceLabel.text = "ACTIVATION REQUIRED"
+        } else {
+            cardActivation.visibility = View.GONE
+            cardAppsDrawer.visibility = View.VISIBLE
+            tvWorkspaceLabel.text = "SECURE WORKSPACE UTILITIES"
         }
     }
 

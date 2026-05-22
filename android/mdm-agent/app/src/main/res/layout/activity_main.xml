@@ -160,6 +160,7 @@
 
                     <!-- Workspace Apps Drawer -->
                     <LinearLayout
+                        android:id="@+id/card_apps_drawer"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="@drawable/glass_card_bg"
