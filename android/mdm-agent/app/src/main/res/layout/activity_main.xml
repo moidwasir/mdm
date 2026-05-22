@@ -105,6 +105,59 @@
                         android:layout_width="match_parent"
                         android:layout_height="20dp" />
 
+                    <!-- Activation Card (shown when not enrolled) -->
+                    <LinearLayout
+                        android:id="@+id/card_activation"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/glass_card_bg"
+                        android:orientation="vertical"
+                        android:padding="20dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ACTIVATION REQUIRED"
+                            android:textColor="@color/accent_green_start"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_activation_imei"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="IMEI: Loading..."
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:text="Tap the button below to activate MDM Secure Mode.\nDevice Owner must be set via ADB first."
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:lineSpacingMultiplier="1.2" />
+
+                        <Button
+                            android:id="@+id/btn_activate_secure_mode"
+                            android:layout_width="match_parent"
+                            android:layout_height="54dp"
+                            android:layout_marginTop="16dp"
+                            android:background="@drawable/accent_btn_bg"
+                            android:text="ACTIVATE MDM SECURE MODE"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <!-- Spacer -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="20dp" />
+
                     <!-- Workspace Apps Drawer -->
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -114,6 +167,7 @@
                         android:padding="20dp">
 
                         <TextView
+                            android:id="@+id/tv_workspace_label"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="SECURE WORKSPACE UTILITIES"

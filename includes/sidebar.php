@@ -34,12 +34,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                 <i class="fas fa-sliders"></i> Policies
             </a>
         </div>
-        <div class="nav-section">
-            <div class="nav-section-title">Enrollment</div>
-            <a href="enrollment.php" class="nav-item <?= $currentPage === 'enrollment' ? 'active' : '' ?>">
-                <i class="fas fa-qrcode"></i> QR Enrollment
-            </a>
-        </div>
+
         <div class="nav-section">
             <div class="nav-section-title">Communication</div>
             <a href="chat-monitor.php" class="nav-item <?= $currentPage === 'chat-monitor' ? 'active' : '' ?>">

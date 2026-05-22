@@ -84,6 +84,7 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
 document.getElementById('add-device-form').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -99,13 +100,80 @@ document.getElementById('add-device-form').addEventListener('submit', function(e
     .then(d => {
         if (d.success) {
             showToast('Device registered successfully!', 'success');
-            setTimeout(() => window.location.href = 'devices.php', 1500);
+            // Show modal with QR code
+            showSuccessModal();
         } else {
             showToast(d.message || 'Failed to register device', 'error');
         }
     })
     .catch(() => showToast('Network error', 'error'));
 });
+
+function showSuccessModal() {
+    const modal = document.createElement('div');
+    modal.id = 'success-modal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:10000;';
+
+    const container = document.createElement('div');
+    container.style.cssText = 'background:var(--card-bg);border-radius:var(--radius-lg);padding:32px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;';
+
+    const title = document.createElement('h2');
+    title.style.cssText = 'color:var(--text-primary);margin:0 0 8px;font-size:20px;text-align:center;';
+    title.textContent = 'Device Registered Successfully!';
+
+    const subtitle = document.createElement('p');
+    subtitle.style.cssText = 'color:var(--text-secondary);margin:0 0 24px;font-size:14px;text-align:center;';
+    subtitle.textContent = 'Scan the QR code below to download and install the MDM Agent.';
+
+    const qrContainer = document.createElement('div');
+    qrContainer.style.cssText = 'text-align:center;margin-bottom:24px;';
+    const qrDiv = document.createElement('div');
+    qrDiv.style.cssText = 'display:inline-block;padding:16px;background:white;border-radius:var(--radius-sm);';
+
+    new QRCode(qrDiv, {
+        text: '<?= APP_URL ?>/apk/mdm-agent.apk',
+        width: 200,
+        height: 200
+    });
+    qrContainer.appendChild(qrDiv);
+
+    const linkDiv = document.createElement('div');
+    linkDiv.style.cssText = 'margin-top:16px;font-size:13px;color:var(--text-secondary);';
+    linkDiv.innerHTML = `
+        <span style="display:block;margin-bottom:6px;">Or open this link in your mobile browser:</span>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--bg-input);padding:8px 12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);word-break:break-all;">
+            <a href="<?= APP_URL ?>/apk/mdm-agent.apk" target="_blank" style="color:var(--accent-light);text-decoration:underline;font-family:monospace;font-size:12px;"><?= APP_URL ?>/apk/mdm-agent.apk</a>
+            <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px;font-size:11px;min-height:auto;flex-shrink:0;" onclick="navigator.clipboard.writeText('<?= APP_URL ?>/apk/mdm-agent.apk').then(() => showToast('Link copied!', 'success'))">
+                <i class="fas fa-copy"></i>
+            </button>
+        </div>
+    `;
+    qrContainer.appendChild(linkDiv);
+
+    const steps = document.createElement('div');
+    steps.style.cssText = 'background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;';
+    steps.innerHTML = `
+        <h4 style="margin:0 0 12px;color:var(--success);font-size:14px;">Follow these steps:</h4>
+        <ol style="margin:0;padding-left:20px;color:var(--text-secondary);font-size:13px;line-height:1.6;">
+            <li style="margin-bottom:8px;">Scan the QR code or use the link below to download and install the MDM Agent</li>
+            <li style="margin-bottom:8px;">Connect device via USB and run:<br><code style="background:rgba(0,0,0,0.05);padding:2px 6px;border-radius:4px;font-size:12px;">adb shell dpm set-device-owner com.mdm.agent/com.mdm.agent.DeviceAdminReceiver</code></li>
+            <li style="margin-bottom:0;">Open the app on the phone and tap "ACTIVATE MDM SECURE MODE"</li>
+        </ol>
+    `;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.style.cssText = 'width:100%;padding:12px;background:var(--accent-blue-start);color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:bold;cursor:pointer;';
+    closeBtn.onclick = () => { modal.remove(); window.location.href = 'devices.php'; };
+
+    container.appendChild(title);
+    container.appendChild(subtitle);
+    container.appendChild(qrContainer);
+    container.appendChild(steps);
+    container.appendChild(closeBtn);
+    modal.appendChild(container);
+    document.body.appendChild(modal);
+}
 </script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>

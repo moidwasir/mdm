@@ -129,24 +129,23 @@ class PolicyManager(private val context: Context) {
         Log.i(TAG, "Setting secure mode: $enabled")
 
         val pm = context.packageManager
-        val flags = PackageManager.MATCH_UNINSTALLED_PACKAGES or PackageManager.MATCH_DISABLED_COMPONENTS
         
         // 1. Get all installed launcher apps
         val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
-        val launcherApps = pm.queryIntentActivities(mainIntent, flags)
+        val launcherApps = pm.queryIntentActivities(mainIntent, 0)
         
         // 2. Identify Camera apps handling image capture
         val cameraIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
-        val cameraApps = pm.queryIntentActivities(cameraIntent, flags).map { it.activityInfo.packageName }
+        val cameraApps = pm.queryIntentActivities(cameraIntent, 0).map { it.activityInfo.packageName }
 
         // 3. Identify Files/Document apps
         val filesIntent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
         }
-        val filesApps = pm.queryIntentActivities(filesIntent, flags).map { it.activityInfo.packageName }
+        val filesApps = pm.queryIntentActivities(filesIntent, 0).map { it.activityInfo.packageName }
 
         // 4. Keyboard/IME apps
         val ims = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
@@ -156,7 +155,7 @@ class PolicyManager(private val context: Context) {
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
         }
-        val homeApps = pm.queryIntentActivities(homeIntent, flags).map { it.activityInfo.packageName }
+        val homeApps = pm.queryIntentActivities(homeIntent, 0).map { it.activityInfo.packageName }
 
         // 6. Define strict allowlist (packages that should remain visible in Secure Mode)
         val allowList = mutableSetOf<String>().apply {
@@ -187,7 +186,11 @@ class PolicyManager(private val context: Context) {
             add("com.oplus.phonemanager")          // Oppo Phone Manager
             add("com.heytap.market")               // Oppo App Market (needed for silent installs)
 
-            // ── Phone and Contacts background telephony (do NOT hide background services) ──
+            // ── Phone and Contacts (needed for basic device use) ──────────
+            add("com.android.dialer")
+            add("com.google.android.dialer")
+            add("com.android.contacts")
+            add("com.google.android.contacts")
             add("com.android.phone")
             add("com.android.providers.telephony")
             add("com.android.server.telecom")
@@ -200,6 +203,7 @@ class PolicyManager(private val context: Context) {
             // ── Critical Android system packages ─────────────────────────
             add("android")
             add("com.android.systemui")
+            add("com.android.settings")
             add("com.google.android.gms")          // Google Play Services (required for auth/push)
             add("com.google.android.gsf")          // Google Services Framework
         }
@@ -207,9 +211,9 @@ class PolicyManager(private val context: Context) {
         Log.i(TAG, "Allowlist packages: $allowList")
 
         // 7. Hide/Unhide packages using DevicePolicyManager
-        if (enabled) {
-            for (resolveInfo in launcherApps) {
-                val pkg = resolveInfo.activityInfo.packageName
+        for (resolveInfo in launcherApps) {
+            val pkg = resolveInfo.activityInfo.packageName
+            if (enabled) {
                 // If secure mode is enabled, hide anything NOT in the allowlist
                 if (!allowList.contains(pkg)) {
                     try {
@@ -219,33 +223,13 @@ class PolicyManager(private val context: Context) {
                         Log.w(TAG, "Failed to hide package $pkg: ${e.message}")
                     }
                 }
-            }
-        } else {
-            // If secure mode is disabled, unhide everything that is currently hidden
-            try {
-                val allPackages = pm.getInstalledPackages(PackageManager.MATCH_UNINSTALLED_PACKAGES or PackageManager.MATCH_DISABLED_COMPONENTS)
-                for (pkgInfo in allPackages) {
-                    val pkg = pkgInfo.packageName
-                    if (dpm.isApplicationHidden(admin, pkg)) {
-                        try {
-                            dpm.setApplicationHidden(admin, pkg, false)
-                            Log.i(TAG, "Unhidden package: $pkg")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to unhide package $pkg: ${e.message}")
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to query all packages for unhiding: ${e.message}")
-                // Fallback: unhide from the query launcher list
-                for (resolveInfo in launcherApps) {
-                    val pkg = resolveInfo.activityInfo.packageName
-                    try {
-                        dpm.setApplicationHidden(admin, pkg, false)
-                        Log.d(TAG, "Fallback unhidden package: $pkg")
-                    } catch (ex: Exception) {
-                        Log.w(TAG, "Failed to unhide package $pkg in fallback: ${ex.message}")
-                    }
+            } else {
+                // If secure mode is disabled, unhide everything
+                try {
+                    dpm.setApplicationHidden(admin, pkg, false)
+                    Log.d(TAG, "Unhidden package: $pkg")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to unhide package $pkg: ${e.message}")
                 }
             }
         }

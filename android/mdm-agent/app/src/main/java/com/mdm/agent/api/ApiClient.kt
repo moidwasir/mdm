@@ -21,6 +21,8 @@ data class EnrollRequest(
     val os_version: String
 )
 
+data class CheckRegistrationRequest(val imei: String)
+
 data class HeartbeatRequest(
     val imei: String,
     val battery_level: Int?,
@@ -30,7 +32,7 @@ data class HeartbeatRequest(
     val storage_free_mb: Long? = null,
     val wifi_ssid: String?    = null,
     val latitude: Double?     = null,
-    val longitude: Double?    = null
+    val longitude: Double?     = null
 )
 
 // ── Response bodies ───────────────────────────────────────────────────────────
@@ -41,6 +43,14 @@ data class EnrollResponse(
     val policy: PolicyConfig?,
     val ws_url: String?,
     val api_url: String?
+)
+
+data class CheckRegistrationResponse(
+    val success: Boolean,
+    val registered: Boolean,
+    val enrolled: Boolean?,
+    val token: String?,
+    val message: String?
 )
 
 data class HeartbeatResponse(
@@ -72,6 +82,9 @@ data class AppVersion(
 interface MdmApiService {
     @POST("api/enrollment/verify.php")
     suspend fun enroll(@Body request: EnrollRequest): EnrollResponse
+
+    @POST("api/devices/check-registration.php")
+    suspend fun checkRegistration(@Body request: CheckRegistrationRequest): CheckRegistrationResponse
 
     @POST("api/devices/heartbeat.php")
     suspend fun heartbeat(@Body request: HeartbeatRequest): HeartbeatResponse

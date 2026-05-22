@@ -23,7 +23,10 @@ include __DIR__ . '/../includes/header.php';
         <h1><i class="fas fa-mobile-screen"></i> Devices</h1>
         <p><?= $result['total'] ?> total devices</p>
     </div>
-    <a href="add-device.php" class="btn btn-primary" id="btn-add-device"><i class="fas fa-plus"></i> Add Device</a>
+    <div style="display:flex;gap:12px;">
+        <button class="btn btn-secondary" id="btn-download-apk" onclick="showDownloadModal()"><i class="fas fa-download"></i> Download APK</button>
+        <a href="add-device.php" class="btn btn-primary" id="btn-add-device"><i class="fas fa-plus"></i> Add Device</a>
+    </div>
 </div>
 
 <!-- Filters -->
@@ -90,6 +93,7 @@ include __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
 function blockDevice(id) {
     if (!confirm('Are you sure you want to block this device?')) return;
@@ -101,6 +105,62 @@ function blockDevice(id) {
         if (d.success) location.reload();
         else alert(d.message);
     });
+}
+
+function showDownloadModal() {
+    const modal = document.createElement('div');
+    modal.id = 'download-modal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:10000;';
+
+    const container = document.createElement('div');
+    container.style.cssText = 'background:var(--card-bg);border-radius:var(--radius-lg);padding:32px;max-width:400px;width:90%;text-align:center;';
+
+    const title = document.createElement('h2');
+    title.style.cssText = 'color:var(--text-primary);margin:0 0 16px;font-size:18px;';
+    title.textContent = 'Download MDM Agent APK';
+
+    const qrContainer = document.createElement('div');
+    qrContainer.style.cssText = 'margin:16px 0;';
+    const qrDiv = document.createElement('div');
+    qrDiv.style.cssText = 'display:inline-block;padding:16px;background:white;border-radius:var(--radius-sm);';
+
+    new QRCode(qrDiv, {
+        text: '<?= APP_URL ?>/apk/mdm-agent.apk',
+        width: 180,
+        height: 180
+    });
+    qrContainer.appendChild(qrDiv);
+
+    const linkDiv = document.createElement('div');
+    linkDiv.style.cssText = 'margin-top:16px;font-size:13px;color:var(--text-secondary);text-align:left;';
+    linkDiv.innerHTML = `
+        <span style="display:block;margin-bottom:6px;text-align:center;">Or open this link on your mobile device:</span>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--bg-input);padding:8px 12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);word-break:break-all;">
+            <a href="<?= APP_URL ?>/apk/mdm-agent.apk" target="_blank" style="color:var(--accent-light);text-decoration:underline;font-family:monospace;font-size:12px;"><?= APP_URL ?>/apk/mdm-agent.apk</a>
+            <button type="button" class="btn btn-secondary btn-sm" style="padding:4px 8px;font-size:11px;min-height:auto;flex-shrink:0;" onclick="navigator.clipboard.writeText('<?= APP_URL ?>/apk/mdm-agent.apk').then(() => { if(typeof showToast === 'function') { showToast('Link copied!', 'success'); } else { alert('Link copied!'); } })">
+                <i class="fas fa-copy"></i>
+            </button>
+        </div>
+    `;
+    qrContainer.appendChild(linkDiv);
+
+    const link = document.createElement('a');
+    link.href = '<?= APP_URL ?>/apk/mdm-agent.apk';
+    link.download = 'mdm-agent.apk';
+    link.style.cssText = 'display:inline-block;margin-top:16px;padding:12px 24px;background:var(--accent-blue-start);color:white;border-radius:var(--radius-sm);text-decoration:none;font-weight:bold;';
+    link.textContent = 'Direct Download';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.style.cssText = 'margin-top:12px;padding:8px 24px;background:transparent;color:var(--text-secondary);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:14px;';
+    closeBtn.onclick = () => modal.remove();
+
+    container.appendChild(title);
+    container.appendChild(qrContainer);
+    container.appendChild(link);
+    container.appendChild(closeBtn);
+    modal.appendChild(container);
+    document.body.appendChild(modal);
 }
 </script>
 

@@ -15,8 +15,6 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- PARTIAL_WAKE_LOCK keeps CPU awake during heartbeat when screen is off (fights HANS freezer) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- Required to query all installed launcher apps on Android 11+ -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
         android:allowBackup="false"

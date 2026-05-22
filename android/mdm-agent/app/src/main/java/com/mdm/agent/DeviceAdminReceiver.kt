@@ -15,7 +15,25 @@ class DeviceAdminReceiver : DeviceAdminReceiver() {
     override fun onProfileProvisioningComplete(context: Context, intent: Intent) {
         Log.i(TAG, "Device provisioning complete — starting enrollment")
         val prefs = context.getSharedPreferences("mdm", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean("provisioning_complete", true).apply()
+        
+        // Retrieve provisioning extras
+        val extras: android.os.PersistableBundle? = intent.getParcelableExtra(
+            android.app.admin.DevicePolicyManager.EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE
+        )
+        
+        val editor = prefs.edit()
+        editor.putBoolean("provisioning_complete", true)
+        
+        if (extras != null) {
+            val token = extras.getString("enrollment_token", "")
+            Log.i(TAG, "Retrieved provisioning extras: token=$token")
+            if (!token.isNullOrEmpty()) {
+                editor.putString("enrollment_token", token)
+            }
+        } else {
+            Log.w(TAG, "No provisioning admin extras bundle found in intent")
+        }
+        editor.apply()
 
         // Launch main activity to complete enrollment with server
         val i = Intent(context, MainActivity::class.java)
@@ -40,8 +58,7 @@ class DeviceAdminReceiver : DeviceAdminReceiver() {
             val prefs = context.getSharedPreferences("mdm", Context.MODE_PRIVATE)
             val isEnrolled = prefs.getBoolean("enrolled", false)
             if (isEnrolled) {
-                Log.i(TAG, "Boot completed — device enrolled, re-applying policy & restarting heartbeat service")
-                PolicyManager(context).applyCurrentPolicy()
+                Log.i(TAG, "Boot completed — device enrolled, restarting heartbeat service")
                 val serviceIntent = Intent(context, HeartbeatService::class.java)
                 context.startForegroundService(serviceIntent)
             } else {

@@ -13,6 +13,8 @@ import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.mdm.agent.api.ApiClient
+import com.mdm.agent.api.CheckRegistrationRequest
+import com.mdm.agent.api.CheckRegistrationResponse
 import com.mdm.agent.api.EnrollRequest
 import kotlinx.coroutines.*
 
@@ -25,6 +27,7 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
 
+@Suppress("HardwareIds", "MissingPermission")
 class MainActivity : AppCompatActivity() {
 
     companion object {
@@ -46,13 +49,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnLaunchFiles: Button
     private lateinit var tvDeviceId: TextView
     private lateinit var tvImei: TextView
-
-    // Tab Views
+    private lateinit var tvActivationImei: TextView
+    private lateinit var btnActivateSecureMode: Button
+    private lateinit var cardActivation: View
     private lateinit var layoutWorkspace: View
     private lateinit var layoutSettings: View
     private lateinit var btnTabWorkspace: TextView
     private lateinit var btnTabSettings: TextView
     private lateinit var layoutSystemVersion: View
+    private lateinit var tvWorkspaceLabel: TextView
 
     // Secret Toggle State
     private var versionClickCount = 0
@@ -60,12 +65,18 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // 1. Set our beautiful glassmorphic layout
         setContentView(R.layout.activity_main)
-        
+
         // 2. Setup UI references and click listeners
         setupUI()
+
+        // Check if token was passed in the intent (manual developer enrollment command)
+        val tokenExtra = intent?.getStringExtra("enrollment_token")
+        if (!tokenExtra.isNullOrEmpty()) {
+            prefs.edit().putString("enrollment_token", tokenExtra).apply()
+        }
 
         val enrolled = prefs.getBoolean("enrolled", false)
 
@@ -77,14 +88,14 @@ class MainActivity : AppCompatActivity() {
             // Request battery optimization exemption on each launch (only prompts once)
             requestBatteryOptimizationExemption()
         } else {
-            // First run after QR provisioning — enroll with server
+            // First run — enroll with server
             updateUI()
             val token = prefs.getString("enrollment_token", "") ?: ""
             if (token.isNotEmpty()) {
                 enrollWithServer(token)
             } else {
-                Log.w(TAG, "No enrollment token found — waiting for provisioning")
-                Toast.makeText(this, "MDM Agent: Waiting for enrollment...", Toast.LENGTH_LONG).show()
+                // Check registration with IMEI
+                checkRegistration()
             }
         }
     }
@@ -98,17 +109,22 @@ class MainActivity : AppCompatActivity() {
         btnLaunchFiles = findViewById(R.id.btn_launch_files)
         tvDeviceId = findViewById(R.id.tv_device_id)
         tvImei = findViewById(R.id.tv_imei)
-
-        // Tab Views
+        tvActivationImei = findViewById(R.id.tv_activation_imei)
+        btnActivateSecureMode = findViewById(R.id.btn_activate_secure_mode)
+        cardActivation = findViewById(R.id.card_activation)
         layoutWorkspace = findViewById(R.id.layout_workspace)
         layoutSettings = findViewById(R.id.layout_settings)
         btnTabWorkspace = findViewById(R.id.btn_tab_workspace)
         btnTabSettings = findViewById(R.id.btn_tab_settings)
         layoutSystemVersion = findViewById(R.id.layout_system_version)
+        tvWorkspaceLabel = findViewById(R.id.tv_workspace_label)
 
         btnLaunchChat.setOnClickListener { launchChatApp() }
         btnLaunchCamera.setOnClickListener { launchCamera() }
         btnLaunchFiles.setOnClickListener { launchFiles() }
+
+        // Activation button handler
+        btnActivateSecureMode.setOnClickListener { handleActivateSecureMode() }
 
         // Navigation tab switching
         btnTabWorkspace.setOnClickListener { switchTab(true) }
@@ -157,6 +173,65 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun checkRegistration() {
+        scope.launch {
+            try {
+                val imei = getImei()
+                val response = withContext(Dispatchers.IO) {
+                    ApiClient.service.checkRegistration(CheckRegistrationRequest(imei = imei))
+                }
+
+                if (response.success && response.registered) {
+                    // Save token for enrollment
+                    if (response.token != null) {
+                        prefs.edit().putString("enrollment_token", response.token).apply()
+                    }
+
+                    if (response.enrolled == true) {
+                        // Already enrolled, proceed normally
+                        prefs.edit().putBoolean("enrolled", true).apply()
+                        applyCurrentPolicy()
+                        startHeartbeatService()
+                        updateUI()
+                    } else {
+                        // Show activation card
+                        tvActivationImei.text = "IMEI: $imei"
+                        cardActivation.visibility = View.VISIBLE
+                        layoutWorkspace.visibility = View.GONE
+                        tvWorkspaceLabel.text = "ACTIVATION REQUIRED"
+                    }
+                } else {
+                    Toast.makeText(this@MainActivity, response.message ?: "Device not registered", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Check registration failed: ${e.message}")
+                Toast.makeText(this@MainActivity, "Check registration failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun handleActivateSecureMode() {
+        // Verify if Device Owner is active
+        if (!dpm.isDeviceOwnerApp(packageName)) {
+            // Device Owner not active - show dialog explaining ADB command
+            val dialog = android.app.AlertDialog.Builder(this)
+                .setTitle("Device Owner Not Active")
+                .setMessage("Device Owner must be set via ADB before activating Secure Mode.\n\nConnect your device via USB and run:\n\nadb shell dpm set-device-owner com.mdm.agent/com.mdm.agent.DeviceAdminReceiver")
+                .setPositiveButton("OK", null)
+                .create()
+            dialog.show()
+            return
+        }
+
+        // Device Owner is active - proceed with enrollment
+        val token = prefs.getString("enrollment_token", "") ?: ""
+        if (token.isNotEmpty()) {
+            enrollWithServer(token)
+        } else {
+            Toast.makeText(this, "No enrollment token found", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun updateUI() {
         val enrolled = prefs.getBoolean("enrolled", false)
         val imei = prefs.getString("imei", "Unavailable")
@@ -188,7 +263,7 @@ class MainActivity : AppCompatActivity() {
         if (!enrolled) {
             tvStatusTitle.text = "AWAITING ENROLLMENT..."
             tvStatusTitle.setTextColor(Color.parseColor("#F59E0B"))
-            tvStatusDesc.text = "Device is not yet enrolled with the MDM administration server. Please verify network connection or scan a valid provisioning QR code."
+            tvStatusDesc.text = "Device is not yet enrolled with the MDM administration server. Please register the device IMEI on the admin portal."
         }
     }
 
@@ -228,13 +303,13 @@ class MainActivity : AppCompatActivity() {
             if (pin == "8888") {
                 dialog.dismiss()
                 val nextMode = !isSecureMode
-                
+
                 // Toggle secure mode using PolicyManager
                 pm.setSecureMode(nextMode)
-                
+
                 // Refresh our dashboard UI
                 updateUI()
-                
+
                 if (nextMode) {
                     Toast.makeText(this, "MDM Secure Mode activated! Apps hidden.", Toast.LENGTH_LONG).show()
                 } else {
@@ -298,11 +373,12 @@ class MainActivity : AppCompatActivity() {
                         .putBoolean("enrolled", true)
                         .putString("imei", imei)
                         .putInt("device_id", response.device_id ?: 0)
-                        .putBoolean("policy_secure_mode", true)
                         .apply()
 
-                    response.policy?.let { PolicyManager(this@MainActivity).applyPolicy(it) }
-                    PolicyManager(this@MainActivity).setSecureMode(true)
+                    val pm = PolicyManager(this@MainActivity)
+                    response.policy?.let { pm.applyPolicy(it) }
+                    pm.applyCurrentPolicy()
+
                     startHeartbeatService()
                     installChatApp()
                     Log.i(TAG, "Enrollment successful!")
@@ -422,11 +498,17 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
+        val tokenExtra = intent?.getStringExtra("enrollment_token")
+        if (!tokenExtra.isNullOrEmpty()) {
+            prefs.edit().putString("enrollment_token", tokenExtra).apply()
+        }
         val enrolled = prefs.getBoolean("enrolled", false)
         if (!enrolled) {
             val token = prefs.getString("enrollment_token", "") ?: ""
             if (token.isNotEmpty()) {
                 enrollWithServer(token)
+            } else {
+                checkRegistration()
             }
         }
         updateUI()
