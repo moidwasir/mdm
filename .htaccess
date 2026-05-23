@@ -1,4 +1,10 @@
-Options -Indexes
+Options -Indexes -MultiViews
+
+# Rewrite /enroll to enroll.php
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^enroll$ enroll.php [L,QSA]
+</IfModule>
 
 # Security headers
 <IfModule mod_headers.c>

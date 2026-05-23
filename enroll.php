@@ -46,7 +46,7 @@ if (empty($token)) {
 
 $apkUrl    = APP_URL . '/apk/mdm-agent.apk';
 $deepLink  = 'mdm://enroll?token=' . urlencode($token);
-$enrollUrl = APP_URL . '/enroll?token=' . urlencode($token);
+$enrollUrl = APP_URL . '/enroll.php?token=' . urlencode($token);
 $expiresIn = $tokenValid ? max(0, strtotime($tokenData['expires_at']) - time()) : 0;
 $expiresHours = floor($expiresIn / 3600);
 $expiresMin   = floor(($expiresIn % 3600) / 60);

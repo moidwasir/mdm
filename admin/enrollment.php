@@ -156,7 +156,7 @@ include __DIR__ . '/../includes/header.php';
                 </thead>
                 <tbody>
                     <?php foreach ($tokens as $t):
-                        $enrollLink = APP_URL . '/enroll?token=' . urlencode($t['token']);
+                        $enrollLink = APP_URL . '/enroll.php?token=' . urlencode($t['token']);
                         $status = $t['token_status'];
                         $statusColors = [
                             'active'  => ['bg' => 'rgba(16,185,129,0.15)',  'color' => '#10B981'],
@@ -412,7 +412,7 @@ function addTokenToHistory(token, expiresAt) {
     const expiryDate = new Date(expiresAt);
     const expiryStr  = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                      + ', ' + expiryDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-    const enrollLink = APP_URL + '/enroll?token=' + encodeURIComponent(token);
+    const enrollLink = APP_URL + '/enroll.php?token=' + encodeURIComponent(token);
 
     const tr = document.createElement('tr');
     tr.style.cssText = 'border-bottom:1px solid var(--border-color); background:rgba(16,185,129,0.04);';

@@ -20,7 +20,7 @@ $db   = getDB();
 $stmt = $db->prepare("INSERT INTO enrollment_tokens (token, qr_data, policy_id, expires_at) VALUES (?, ?, ?, ?)");
 $stmt->execute([$token, $label ?: null, $policyId, $expiresAt]);
 
-$enrollmentUrl = APP_URL . '/enroll?token=' . urlencode($token);
+$enrollmentUrl = APP_URL . '/enroll.php?token=' . urlencode($token);
 
 jsonResponse([
     'success'        => true,
