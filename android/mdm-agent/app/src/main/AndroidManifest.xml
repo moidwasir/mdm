@@ -59,6 +59,15 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
             </intent-filter>
+        <!-- Deep-link handler for wireless QR enrollment: http://SERVER/enroll?token=XXX -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" android:host="187.77.118.52" android:pathPrefix="/enroll" />
+                <data android:scheme="https" android:host="187.77.118.52" android:pathPrefix="/enroll" />
+                <data android:scheme="mdm" android:host="enroll" />
+            </intent-filter>
         </activity>
 
         <!-- Ring Activity for loud alarms and flashing torch -->

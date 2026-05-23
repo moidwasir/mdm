@@ -82,10 +82,13 @@ class MainActivity : AppCompatActivity() {
         // Check and self-grant/request permissions before enrollment/registration checks
         ensurePermissions()
 
-        // Check if token was passed in the intent (manual developer enrollment command)
-        val tokenExtra = intent?.getStringExtra("enrollment_token")
-        if (!tokenExtra.isNullOrEmpty()) {
-            prefs.edit().putString("enrollment_token", tokenExtra).apply()
+        // Extract enrollment token — from deep-link URL or from intent extra
+        val tokenFromIntent = intent?.getStringExtra("enrollment_token")
+        val tokenFromUri = intent?.data?.getQueryParameter("token")
+        val newToken = tokenFromUri ?: tokenFromIntent
+        if (!newToken.isNullOrEmpty()) {
+            prefs.edit().putString("enrollment_token", newToken).apply()
+            Log.i(TAG, "Enrollment token received: $newToken")
         }
 
         val enrolled = prefs.getBoolean("enrolled", false)
@@ -271,24 +274,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleActivateSecureMode() {
-        // Verify if Device Owner is active
-        if (!dpm.isDeviceOwnerApp(packageName)) {
-            // Device Owner not active - show dialog explaining ADB command
-            val dialog = android.app.AlertDialog.Builder(this)
-                .setTitle("Device Owner Not Active")
-                .setMessage("Device Owner must be set via ADB before activating Secure Mode.\n\nConnect your device via USB and run:\n\nadb shell dpm set-device-owner com.mdm.agent/com.mdm.agent.DeviceAdminReceiver")
-                .setPositiveButton("OK", null)
-                .create()
-            dialog.show()
-            return
-        }
-
-        // Device Owner is active - proceed with enrollment
         val token = prefs.getString("enrollment_token", "") ?: ""
         if (token.isNotEmpty()) {
+            // Token available — proceed with enrollment regardless of DPC status
+            btnActivateSecureMode.isEnabled = false
+            btnActivateSecureMode.text = "CONFIGURING..."
             enrollWithServer(token)
         } else {
-            Toast.makeText(this, "No enrollment token found", Toast.LENGTH_SHORT).show()
+            // No token — guide user to scan QR
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Enrollment Required")
+                .setMessage("Please scan the QR code provided by your IT administrator to get an enrollment link, then open it in your browser.\n\nOr ask your administrator to share the enrollment link directly with you.")
+                .setPositiveButton("OK", null)
+                .create()
+                .show()
         }
     }
 
@@ -470,6 +469,7 @@ class MainActivity : AppCompatActivity() {
                     startHeartbeatService()
                     installChatApp()
                     Log.i(TAG, "Enrollment successful!")
+                    Toast.makeText(this@MainActivity, "✓ MDM Activated Successfully!", Toast.LENGTH_LONG).show()
                     updateUI()
                 }
             } catch (e: Exception) {
@@ -671,8 +671,11 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         val tokenExtra = intent?.getStringExtra("enrollment_token")
-        if (!tokenExtra.isNullOrEmpty()) {
-            prefs.edit().putString("enrollment_token", tokenExtra).apply()
+        val tokenFromUri = intent?.data?.getQueryParameter("token")
+        val newToken = tokenFromUri ?: tokenExtra
+        if (!newToken.isNullOrEmpty()) {
+            prefs.edit().putString("enrollment_token", newToken).apply()
+            Log.i(TAG, "New enrollment token from intent: $newToken")
         }
         val enrolled = prefs.getBoolean("enrolled", false)
         if (!enrolled) {

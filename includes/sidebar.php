@@ -27,6 +27,9 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
             <a href="add-device.php" class="nav-item <?= $currentPage === 'add-device' ? 'active' : '' ?>">
                 <i class="fas fa-barcode"></i> Add Device
             </a>
+            <a href="enrollment.php" class="nav-item <?= $currentPage === 'enrollment' ? 'active' : '' ?>">
+                <i class="fas fa-qrcode"></i> Enrollment QR
+            </a>
             <a href="users.php" class="nav-item <?= $currentPage === 'users' ? 'active' : '' ?>">
                 <i class="fas fa-users"></i> Users
             </a>
