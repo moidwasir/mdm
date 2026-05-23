@@ -120,6 +120,16 @@ class HeartbeatService : Service() {
             ))
 
             if (response.success) {
+                // Apply policy from server
+                response.policy?.let { serverPolicy ->
+                    try {
+                        PolicyManager(this@HeartbeatService).applyPolicy(serverPolicy)
+                        Log.i(TAG, "Dynamic policy update applied: $serverPolicy")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to apply remote policy", e)
+                    }
+                }
+
                 // 1. Process pending remote commands (lock / wipe / ring etc.)
                 response.commands?.forEach { cmd ->
                     scope.launch {
