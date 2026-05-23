@@ -21,7 +21,7 @@ class HeartbeatService : Service() {
         const val TAG = "MDMHeartbeat"
         const val CHANNEL_ID = "mdm_heartbeat"
         const val NOTIF_ID = 1001
-        const val INTERVAL_MS = 60_000L
+        const val INTERVAL_MS = 10_000L
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())

@@ -56,7 +56,7 @@ define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/gif', 'image/we
 define('ALLOWED_FILE_TYPES', ['application/pdf', 'image/jpeg', 'image/png', 'application/msword']);
 
 // Device Heartbeat
-define('HEARTBEAT_INTERVAL', 60); // seconds
+define('HEARTBEAT_INTERVAL', 10); // seconds
 define('OFFLINE_THRESHOLD', 300); // 5 minutes without heartbeat = offline
 
 // Enrollment
