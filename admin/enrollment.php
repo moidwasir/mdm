@@ -294,8 +294,9 @@ async function generateQR() {
                 <span style="padding:4px 12px; border-radius:20px; background:rgba(16,185,129,0.15); color:#10B981; font-size:12px; font-weight:700; border:1px solid rgba(16,185,129,0.3);">
                     <i class="fas fa-check-circle"></i> Enrollment QR · Valid 24h
                 </span>`);
-            showToast('QR code generated successfully!', 'success');
-            setTimeout(() => location.reload(), 1500);
+            showToast('QR code generated! Scroll down to scan or share.', 'success');
+            // Add the new token row to history table without reloading
+            addTokenToHistory(data.token, data.expires_at);
         } else {
             showToast(data.message || 'Failed to generate token', 'error');
         }
@@ -400,6 +401,42 @@ function downloadQR() {
         a.href = img.src;
         a.click();
     }
+}
+
+/* ── Add new token row to history without reloading ── */
+function addTokenToHistory(token, expiresAt) {
+    const tbody = document.querySelector('table tbody');
+    if (!tbody) return; // No table yet (empty state) — just skip
+
+    const shortToken = token.substring(0, 8) + '...';
+    const expiryDate = new Date(expiresAt);
+    const expiryStr  = expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                     + ', ' + expiryDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const enrollLink = APP_URL + '/enroll?token=' + encodeURIComponent(token);
+
+    const tr = document.createElement('tr');
+    tr.style.cssText = 'border-bottom:1px solid var(--border-color); background:rgba(16,185,129,0.04);';
+    tr.innerHTML = `
+        <td style="padding:12px 16px; font-family:monospace; color:var(--text-primary);">${shortToken}</td>
+        <td style="padding:12px 8px; color:var(--text-secondary);">—</td>
+        <td style="padding:12px 8px;">
+            <span style="padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; background:rgba(16,185,129,0.15); color:#10B981; text-transform:uppercase; letter-spacing:0.04em;">active</span>
+        </td>
+        <td style="padding:12px 8px; color:var(--text-muted); font-size:12px;">${expiryStr}</td>
+        <td style="padding:12px 8px; color:var(--text-muted); font-family:monospace; font-size:11px;">—</td>
+        <td style="padding:12px 8px;">
+            <button onclick="showExistingQR('${enrollLink.replace(/'/g,"\\'")}\")"
+                    title="Show QR"
+                    style="padding:5px 10px; background:transparent; border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:12px; cursor:pointer;">
+                <i class="fas fa-qrcode"></i>
+            </button>
+        </td>`;
+
+    // Insert at the top of the table
+    tbody.insertBefore(tr, tbody.firstChild);
+
+    // Highlight then fade the new row
+    setTimeout(() => { tr.style.background = ''; }, 2000);
 }
 </script>
 
